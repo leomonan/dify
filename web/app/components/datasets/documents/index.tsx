@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { useDebounce, useDebounceFn } from 'ahooks'
 import { groupBy } from 'lodash-es'
 import { PlusIcon } from '@heroicons/react/24/solid'
-import { RiDraftLine, RiExternalLinkLine } from '@remixicon/react'
+import { RiDraftLine, RiExternalLinkLine, RiRefreshLine } from '@remixicon/react'
 import AutoDisabledDocument from '../common/document-status-with-action/auto-disabled-document'
 import List from './list'
 import s from './style.module.css'
@@ -14,7 +14,7 @@ import Loading from '@/app/components/base/loading'
 import Button from '@/app/components/base/button'
 import Input from '@/app/components/base/input'
 import { get } from '@/service/base'
-import { createDocument } from '@/service/datasets'
+import { createDocument, retryAllDocs } from '@/service/datasets'
 import { useDatasetDetailContext } from '@/context/dataset-detail'
 import { NotionPageSelectorModal } from '@/app/components/base/notion-page-selector'
 import type { NotionPage } from '@/models/common'
@@ -30,6 +30,7 @@ import useEditDocumentMetadata from '../metadata/hooks/use-edit-dataset-metadata
 import DatasetMetadataDrawer from '../metadata/metadata-dataset/dataset-metadata-drawer'
 import StatusWithAction from '../common/document-status-with-action/status-with-action'
 import { useDocLink } from '@/context/i18n'
+import Toast from '@/app/components/base/toast'
 
 const FolderPlusIcon = ({ className }: React.SVGProps<SVGElement>) => {
   return <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" className={className ?? ''}>
@@ -96,6 +97,7 @@ const Documents: FC<IDocumentsProps> = ({ datasetId }) => {
   const { dataset } = useDatasetDetailContext()
   const [notionPageSelectorModalVisible, setNotionPageSelectorModalVisible] = useState(false)
   const [timerCanRun, setTimerCanRun] = useState(true)
+  const [isRetryingAll, setIsRetryingAll] = useState(false)
   const isDataSourceNotion = dataset?.data_source_type === DataSourceType.NOTION
   const isDataSourceWeb = dataset?.data_source_type === DataSourceType.WEB
   const isDataSourceFile = dataset?.data_source_type === DataSourceType.FILE
@@ -252,6 +254,31 @@ const Documents: FC<IDocumentsProps> = ({ datasetId }) => {
     onUpdateDocList: invalidDocumentList,
   })
 
+  const handleRetryAllDocs = useCallback(async () => {
+    if (isRetryingAll) return
+
+    setIsRetryingAll(true)
+    try {
+      const result = await retryAllDocs({ datasetId })
+      Toast.notify({
+        type: 'success',
+        message: result.message || '批量重试操作已提交',
+      })
+      // 刷新文档列表
+      invalidDocumentList()
+      setTimerCanRun(true)
+    }
+ catch (error: any) {
+      Toast.notify({
+        type: 'error',
+        message: error.message || '批量重试失败',
+      })
+    }
+ finally {
+      setIsRetryingAll(false)
+    }
+  }, [datasetId, isRetryingAll, invalidDocumentList])
+
   return (
     <div className='flex h-full flex-col overflow-y-auto'>
       <div className='flex flex-col justify-center gap-1 px-6 pt-4'>
@@ -282,6 +309,17 @@ const Documents: FC<IDocumentsProps> = ({ datasetId }) => {
             {!isFreePlan && <AutoDisabledDocument datasetId={datasetId} />}
             <IndexFailed datasetId={datasetId} />
             {!embeddingAvailable && <StatusWithAction type='warning' description={t('dataset.embeddingModelNotAvailable')} />}
+            {embeddingAvailable && (
+              <Button
+                variant='secondary'
+                className='shrink-0'
+                onClick={handleRetryAllDocs}
+                disabled={isRetryingAll}
+              >
+                <RiRefreshLine className={cn('mr-1 size-4', isRetryingAll && 'animate-spin')} />
+                {isRetryingAll ? '恢复中...' : '恢复索引'}
+              </Button>
+            )}
             {embeddingAvailable && (
               <Button variant='secondary' className='shrink-0' onClick={showEditMetadataModal}>
                 <RiDraftLine className='mr-1 size-4' />

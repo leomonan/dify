@@ -1028,6 +1028,76 @@ class WebsiteDocumentSyncApi(DocumentResource):
         return {"result": "success"}, 200
 
 
+class DocumentBatchRetryAllApi(DocumentResource):
+    @setup_required
+    @login_required
+    @account_initialization_required
+    @cloud_edition_billing_rate_limit_check("knowledge")
+    def post(self, dataset_id):
+        """批量重试数据集中所有非完成状态的文档"""
+        dataset_id = str(dataset_id)
+        dataset = DatasetService.get_dataset(dataset_id)
+        
+        if not dataset:
+            raise NotFound("Dataset not found.")
+            
+        # 检查用户权限
+        if not current_user.is_dataset_editor:
+            raise Forbidden()
+            
+        try:
+            DatasetService.check_dataset_permission(dataset, current_user)
+        except services.errors.account.NoPermissionError as e:
+            raise Forbidden(str(e))
+        
+        # 查询所有非完成状态的文档
+        retry_documents = []
+        documents = db.session.query(Document).filter(
+            Document.dataset_id == dataset_id,
+            Document.tenant_id == current_user.current_tenant_id,
+            Document.indexing_status.in_(['waiting', 'parsing', 'cleaning', 'splitting', 'indexing', 'paused', 'error'])
+        ).all()
+        
+        success_count = 0
+        error_count = 0
+        
+        for document in documents:
+            try:
+                # 403 if document is archived
+                if DocumentService.check_archived(document):
+                    logging.warning(f"Skipped archived document: {document.id}")
+                    continue
+                    
+                retry_documents.append(document)
+                success_count += 1
+            except Exception as e:
+                logging.exception(f"Failed to prepare document for retry, document id: {document.id}")
+                message = f"检查文档: {document.id} 失败: {str(e)}"
+                error_count += 1
+                continue
+        
+        if retry_documents:
+            try:
+                # 批量重试文档
+                DocumentService.retry_document(dataset_id, retry_documents)
+                message = f"已提交重试 {success_count} 个文档"
+                if error_count > 0:
+                    message += f"，{error_count} 个文档无法重试"
+            except Exception as e:
+                logging.exception(f"Failed to submit retry documents for dataset {dataset_id}")
+                message = f"重试提交失败: {str(e)}"
+        else:
+            message = "没有找到需要重试的文档"
+        
+        return {
+            "result": "success",
+            "total_documents": len(documents),
+            "success_count": success_count,
+            "error_count": error_count,
+            "message": message
+        }, 200
+
+
 api.add_resource(GetProcessRuleApi, "/datasets/process-rule")
 api.add_resource(DatasetDocumentListApi, "/datasets/<uuid:dataset_id>/documents")
 api.add_resource(DatasetInitApi, "/datasets/init")
@@ -1048,5 +1118,6 @@ api.add_resource(DocumentPauseApi, "/datasets/<uuid:dataset_id>/documents/<uuid:
 api.add_resource(DocumentRecoverApi, "/datasets/<uuid:dataset_id>/documents/<uuid:document_id>/processing/resume")
 api.add_resource(DocumentRetryApi, "/datasets/<uuid:dataset_id>/retry")
 api.add_resource(DocumentRenameApi, "/datasets/<uuid:dataset_id>/documents/<uuid:document_id>/rename")
+api.add_resource(DocumentBatchRetryAllApi, "/datasets/<uuid:dataset_id>/documents/retry-all")
 
 api.add_resource(WebsiteDocumentSyncApi, "/datasets/<uuid:dataset_id>/documents/<uuid:document_id>/website-sync")

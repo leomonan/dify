@@ -287,3 +287,17 @@ export const getErrorDocs: Fetcher<ErrorDocsResponse, { datasetId: string }> = (
 export const retryErrorDocs: Fetcher<CommonResponse, { datasetId: string; document_ids: string[] }> = ({ datasetId, document_ids }) => {
   return post<CommonResponse>(`/datasets/${datasetId}/retry`, { body: { document_ids } })
 }
+
+// 批量重试响应类型
+type RetryAllDocsResponse = {
+  result: 'success' | 'fail'
+  total_documents: number
+  success_count: number
+  error_count: number
+  message: string
+}
+
+// 批量重试所有非完成状态的文档
+export const retryAllDocs: Fetcher<RetryAllDocsResponse, { datasetId: string }> = ({ datasetId }) => {
+  return post<RetryAllDocsResponse>(`/datasets/${datasetId}/documents/retry-all`, {})
+}
