@@ -156,4 +156,61 @@ async def safe_api_call(self, func, *args, **kwargs):
 1. **代码生成**：基于知识库内容生成代码片段
 2. **智能问答**：回答项目相关的技术问题
 3. **文档更新**：自动同步项目文档到 Dify 知识库
-4. **工作流集成**：利用 Dify Workflow 执行复杂的代码分析任务 
+4. **工作流集成**：利用 Dify Workflow 执行复杂的代码分析任务
+
+## 数据存储位置
+
+### Dify 知识库数据存储
+
+Dify 的知识库数据文件默认存储在以下位置：
+
+#### 本地存储配置
+- **配置文件**：`api/.env` 或 `api/.env.example`
+- **存储类型**：`STORAGE_TYPE=opendal`（默认）
+- **存储根目录**：`OPENDAL_FS_ROOT=storage`
+
+#### 实际存储路径
+```bash
+# 知识库文档文件存储路径
+{dify-project}/api/storage/upload_files/
+
+# 目录结构示例
+storage/
+├── privkeys/           # 私钥文件
+└── upload_files/       # 上传的知识库文档
+    └── {dataset-id}/   # 按数据集ID分组
+        ├── {file-uuid}.html
+        ├── {file-uuid}.pdf
+        └── {file-uuid}.txt
+```
+
+#### 存储说明
+1. **文档文件**：所有上传到知识库的文档（HTML、PDF、TXT等）都存储在 `storage/upload_files/` 目录下
+2. **按数据集分组**：每个知识库数据集有独立的子目录，目录名为数据集UUID
+3. **文件重命名**：上传的文件会被重命名为UUID格式，保持原始扩展名
+4. **数据库元数据**：文档的元数据信息存储在PostgreSQL数据库中
+5. **向量数据**：如果配置了向量存储（如Weaviate、Qdrant等），向量数据存储在对应的向量数据库中
+
+#### 修改存储位置
+如需修改存储位置，可在 `.env` 文件中配置：
+```bash
+# 修改本地存储根目录
+OPENDAL_FS_ROOT=/custom/storage/path
+
+# 或使用其他存储类型（S3、阿里云OSS等）
+STORAGE_TYPE=s3
+S3_ENDPOINT=https://your-bucket.s3.amazonaws.com
+S3_ACCESS_KEY=your-access-key
+S3_SECRET_KEY=your-secret-key
+S3_BUCKET_NAME=your-bucket-name
+```
+
+#### 备份建议
+- **完整备份**：备份整个 `storage/` 目录 + PostgreSQL数据库
+- **增量备份**：定期备份新增的文档文件
+- **向量数据**：如使用外部向量数据库，需同时备份向量数据
+
+#### MCP集成考虑
+在MCP Bridge中访问知识库时，需要：
+1. 通过Dify API获取文档内容（推荐）
+2. 或直接读取存储文件（需要解析数据库获取文件映射关系） 
