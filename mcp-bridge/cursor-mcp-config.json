@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "dify-knowledge": {
+      "command": "python",
+      "args": ["/path/to/order602/mcp-bridge/src/mcp_server.py"],
+      "env": {
+        "DIFY_API_URL": "http://localhost:5001",
+        "DIFY_API_KEY": "",
+        "LOG_LEVEL": "INFO"
+      }
+    }
+  }
+} 
