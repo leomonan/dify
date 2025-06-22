@@ -699,4 +699,6 @@ export type FetchDocumentsParams = {
   limit?: number
   sort?: string
   status?: DocumentIndexingStatus[]
+  archived?: boolean
+  enabled?: boolean
 }

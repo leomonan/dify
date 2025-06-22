@@ -182,14 +182,26 @@ class DatasetDocumentListApi(Resource):
             search = f"%{search}%"
             query = query.filter(Document.name.like(search))
 
-        # 添加状态过滤
+        # 添加状态过滤（支持多选）
         if status_filter:
             # 验证状态值是否有效
             valid_statuses = ['waiting', 'parsing', 'cleaning', 'splitting', 'indexing', 'paused', 'error', 
                               'completed', 'archived']
             filtered_statuses = [status for status in status_filter if status in valid_statuses]
             if filtered_statuses:
+                # 使用 in_ 运算符实现多选过滤
                 query = query.filter(Document.indexing_status.in_(filtered_statuses))
+        
+        # 添加归档和启用状态过滤
+        archived_filter = request.args.get("archived")
+        if archived_filter is not None:
+            is_archived = archived_filter.lower() in ("yes", "true", "t", "y", "1")
+            query = query.filter(Document.archived == is_archived)
+            
+        enabled_filter = request.args.get("enabled")
+        if enabled_filter is not None:
+            is_enabled = enabled_filter.lower() in ("yes", "true", "t", "y", "1")
+            query = query.filter(Document.enabled == is_enabled)
 
         if sort.startswith("-"):
             sort_logic = desc

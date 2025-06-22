@@ -32,8 +32,8 @@ import DatasetMetadataDrawer from '../metadata/metadata-dataset/dataset-metadata
 import StatusWithAction from '../common/document-status-with-action/status-with-action'
 import { useDocLink } from '@/context/i18n'
 import Toast from '@/app/components/base/toast'
-import type { DocumentIndexingStatus } from '@/models/datasets'
-import { DocumentIndexingStatusList } from '@/models/datasets'
+import type { DocumentDisplayStatus, DocumentIndexingStatus } from '@/models/datasets'
+import { DisplayStatusList } from '@/models/datasets'
 import { useAppContext } from '@/context/app-context'
 
 const FolderPlusIcon = ({ className }: React.SVGProps<SVGElement>) => {
@@ -88,22 +88,43 @@ type IDocumentsProps = {
 export const fetcher = (url: string) => get(url, {}, {})
 const DEFAULT_LIMIT = 10
 
-const statusOptions = DocumentIndexingStatusList.map(status => ({
-  value: status,
-  label: {
-    waiting: '等待中',
-    parsing: '解析中',
-    cleaning: '清理中',
-    splitting: '分割中',
-    indexing: '索引中',
-    paused: '已暂停',
-    error: '错误',
-    completed: '已完成',
-  }[status] || status,
-}))
+// 映射 DisplayStatus 到 DocumentIndexingStatus 和额外过滤条件
+const mapDisplayStatusToIndexingStatus = (displayStatus: DocumentDisplayStatus): {
+  status?: DocumentIndexingStatus[]
+  archived?: boolean
+  enabled?: boolean
+} => {
+  switch (displayStatus) {
+    case 'queuing':
+      return { status: ['waiting'] }
+    case 'indexing':
+      return { status: ['parsing', 'cleaning', 'splitting', 'indexing'] }
+    case 'paused':
+      return { status: ['paused'] }
+    case 'error':
+      return { status: ['error'] }
+    case 'available':
+    case 'enabled':
+      return { status: ['completed'], archived: false, enabled: true }
+    case 'disabled':
+      return { status: ['completed'], archived: false, enabled: false }
+    case 'archived':
+      return { status: ['completed'], archived: true }
+    default:
+      return {}
+  }
+}
 
 const Documents: FC<IDocumentsProps> = ({ datasetId }) => {
   const { t } = useTranslation()
+  const statusOptions = useMemo(() => {
+    return DisplayStatusList
+      .filter(status => status !== 'enabled') // 移除"已启用"选项，因为和"可用"重复
+      .map(status => ({
+        value: status,
+        label: t(`datasetDocuments.list.status.${status}`),
+      }))
+  }, [t])
   const docLink = useDocLink()
   const { plan } = useProviderContext()
   const isFreePlan = plan.type === 'sandbox'
@@ -121,7 +142,8 @@ const Documents: FC<IDocumentsProps> = ({ datasetId }) => {
   const isDataSourceFile = dataset?.data_source_type === DataSourceType.FILE
   const embeddingAvailable = !!dataset?.embedding_available
   const debouncedSearchValue = useDebounce(searchValue, { wait: 500 })
-  const [selectedStatus, setSelectedStatus] = useState<DocumentIndexingStatus[]>([])
+  // 使用多选
+  const [selectedStatuses, setSelectedStatuses] = useState<DocumentDisplayStatus[]>([])
   const [showStatusFilter, setShowStatusFilter] = useState(false)
   const { isCurrentWorkspaceManager } = useAppContext()
 
@@ -139,13 +161,65 @@ const Documents: FC<IDocumentsProps> = ({ datasetId }) => {
     }
   }, [showStatusFilter])
 
+  // 处理多个状态的过滤条件
+  const getFilterParams = () => {
+    if (selectedStatuses.length === 0) return {}
+
+    // 合并所有选中状态的过滤条件
+    const statusFilters = selectedStatuses.map(status => mapDisplayStatusToIndexingStatus(status))
+
+    // 合并所有选中状态的索引状态
+    const statusValues = Array.from(new Set(statusFilters.flatMap(filter => filter.status || [])))
+
+    // 处理 archived 和 enabled 值
+    const archivedValues = statusFilters
+      .filter(f => f.archived !== undefined)
+      .map(f => f.archived)
+
+    const enabledValues = statusFilters
+      .filter(f => f.enabled !== undefined)
+      .map(f => f.enabled)
+
+    const result: Record<string, any> = {}
+
+    if (statusValues.length > 0)
+      result.status = statusValues
+
+    // 特殊处理archived和enabled值
+    // 如果同时选择了archived=true和archived=false的状态，则不应用该过滤器
+    if (archivedValues.length > 0) {
+      const hasTrue = archivedValues.includes(true)
+      const hasFalse = archivedValues.includes(false)
+
+      // 只有当全部为true或全部为false时才应用过滤
+      if (hasTrue && !hasFalse)
+        result.archived = true
+       else if (!hasTrue && hasFalse)
+        result.archived = false
+    }
+
+    // 同样处理enabled值
+    if (enabledValues.length > 0) {
+      const hasTrue = enabledValues.includes(true)
+      const hasFalse = enabledValues.includes(false)
+
+      if (hasTrue && !hasFalse)
+        result.enabled = true
+       else if (!hasTrue && hasFalse)
+        result.enabled = false
+    }
+
+    return result
+  }
+
   const { data: documentsRes, isFetching: isListLoading } = useDocumentList({
     datasetId,
     query: {
       page: currPage + 1,
       limit,
       keyword: debouncedSearchValue,
-      status: selectedStatus.length > 0 ? selectedStatus : undefined,
+      // 使用多选状态条件
+      ...getFilterParams(),
     },
     refetchInterval: (isDataSourceNotion && timerCanRun) ? 2500 : 0,
   })
@@ -290,31 +364,6 @@ const Documents: FC<IDocumentsProps> = ({ datasetId }) => {
     onUpdateDocList: invalidDocumentList,
   })
 
-  const handleRetryAllDocs = useCallback(async () => {
-    if (isRetryingAll) return
-
-    setIsRetryingAll(true)
-    try {
-      const result = await retryAllDocs({ datasetId })
-      Toast.notify({
-        type: 'success',
-        message: result.message || '批量重试操作已提交',
-      })
-      // 刷新文档列表
-      invalidDocumentList()
-      setTimerCanRun(true)
-    }
- catch (error: any) {
-      Toast.notify({
-        type: 'error',
-        message: error.message || '批量重试失败',
-      })
-    }
- finally {
-      setIsRetryingAll(false)
-    }
-  }, [datasetId, isRetryingAll, invalidDocumentList])
-
   const handleRetryAll = async () => {
     if (!isCurrentWorkspaceManager) {
       Toast.notify({ type: 'error', message: '没有权限执行此操作' })
@@ -382,7 +431,7 @@ const Documents: FC<IDocumentsProps> = ({ datasetId }) => {
                 onClick={() => setShowStatusFilter(!showStatusFilter)}
               >
                 <span className="truncate">
-                  {selectedStatus.length === 0 ? '过滤状态' : `已选择 ${selectedStatus.length} 项`}
+                  {selectedStatuses.length === 0 ? '过滤状态' : `已选 ${selectedStatuses.length} 项`}
                 </span>
                 <RiFilterLine className="h-4 w-4" />
               </button>
@@ -393,22 +442,22 @@ const Documents: FC<IDocumentsProps> = ({ datasetId }) => {
                     <span className="text-xs font-medium text-text-secondary">选择状态</span>
                     <button
                       type="button"
-                      onClick={() => setSelectedStatus([])}
+                      onClick={() => setSelectedStatuses([])}
                       className="hover:text-text-accent-hover text-xs text-text-accent"
                     >
-                      清除所有
+                      清除选择
                     </button>
                   </div>
                   {statusOptions.map(option => (
                     <label key={option.value} className="flex cursor-pointer items-center rounded px-2 py-1.5 hover:bg-state-base-hover">
                       <input
                         type="checkbox"
-                        checked={selectedStatus.includes(option.value)}
-                        onChange={(e) => {
-                          if (e.target.checked)
-                            setSelectedStatus([...selectedStatus, option.value])
+                        checked={selectedStatuses.includes(option.value)}
+                        onChange={() => {
+                          if (selectedStatuses.includes(option.value))
+                            setSelectedStatuses(selectedStatuses.filter(status => status !== option.value))
                            else
-                            setSelectedStatus(selectedStatus.filter(s => s !== option.value))
+                            setSelectedStatuses([...selectedStatuses, option.value])
                         }}
                         className="mr-2 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                       />
