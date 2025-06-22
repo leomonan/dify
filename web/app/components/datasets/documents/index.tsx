@@ -6,13 +6,14 @@ import { useRouter } from 'next/navigation'
 import { useDebounce, useDebounceFn } from 'ahooks'
 import { groupBy } from 'lodash-es'
 import { PlusIcon } from '@heroicons/react/24/solid'
-import { RiDraftLine, RiExternalLinkLine, RiRefreshLine } from '@remixicon/react'
+import { RiDraftLine, RiExternalLinkLine, RiFilterLine, RiRefreshLine } from '@remixicon/react'
 import AutoDisabledDocument from '../common/document-status-with-action/auto-disabled-document'
 import List from './list'
 import s from './style.module.css'
 import Loading from '@/app/components/base/loading'
 import Button from '@/app/components/base/button'
 import Input from '@/app/components/base/input'
+
 import { get } from '@/service/base'
 import { createDocument, retryAllDocs } from '@/service/datasets'
 import { useDatasetDetailContext } from '@/context/dataset-detail'
@@ -31,6 +32,9 @@ import DatasetMetadataDrawer from '../metadata/metadata-dataset/dataset-metadata
 import StatusWithAction from '../common/document-status-with-action/status-with-action'
 import { useDocLink } from '@/context/i18n'
 import Toast from '@/app/components/base/toast'
+import type { DocumentIndexingStatus } from '@/models/datasets'
+import { DocumentIndexingStatusList } from '@/models/datasets'
+import { useAppContext } from '@/context/app-context'
 
 const FolderPlusIcon = ({ className }: React.SVGProps<SVGElement>) => {
   return <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" className={className ?? ''}>
@@ -84,6 +88,20 @@ type IDocumentsProps = {
 export const fetcher = (url: string) => get(url, {}, {})
 const DEFAULT_LIMIT = 10
 
+const statusOptions = DocumentIndexingStatusList.map(status => ({
+  value: status,
+  label: {
+    waiting: '等待中',
+    parsing: '解析中',
+    cleaning: '清理中',
+    splitting: '分割中',
+    indexing: '索引中',
+    paused: '已暂停',
+    error: '错误',
+    completed: '已完成',
+  }[status] || status,
+}))
+
 const Documents: FC<IDocumentsProps> = ({ datasetId }) => {
   const { t } = useTranslation()
   const docLink = useDocLink()
@@ -103,6 +121,23 @@ const Documents: FC<IDocumentsProps> = ({ datasetId }) => {
   const isDataSourceFile = dataset?.data_source_type === DataSourceType.FILE
   const embeddingAvailable = !!dataset?.embedding_available
   const debouncedSearchValue = useDebounce(searchValue, { wait: 500 })
+  const [selectedStatus, setSelectedStatus] = useState<DocumentIndexingStatus[]>([])
+  const [showStatusFilter, setShowStatusFilter] = useState(false)
+  const { isCurrentWorkspaceManager } = useAppContext()
+
+  // 点击外部关闭状态过滤器
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement
+      if (!target.closest('.status-filter-container'))
+        setShowStatusFilter(false)
+    }
+
+    if (showStatusFilter) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showStatusFilter])
 
   const { data: documentsRes, isFetching: isListLoading } = useDocumentList({
     datasetId,
@@ -110,6 +145,7 @@ const Documents: FC<IDocumentsProps> = ({ datasetId }) => {
       page: currPage + 1,
       limit,
       keyword: debouncedSearchValue,
+      status: selectedStatus.length > 0 ? selectedStatus : undefined,
     },
     refetchInterval: (isDataSourceNotion && timerCanRun) ? 2500 : 0,
   })
@@ -279,6 +315,38 @@ const Documents: FC<IDocumentsProps> = ({ datasetId }) => {
     }
   }, [datasetId, isRetryingAll, invalidDocumentList])
 
+  const handleRetryAll = async () => {
+    if (!isCurrentWorkspaceManager) {
+      Toast.notify({ type: 'error', message: '没有权限执行此操作' })
+      return
+    }
+
+    try {
+      setIsRetryingAll(true)
+      const result = await retryAllDocs({ datasetId })
+
+      if (result.result === 'success') {
+        Toast.notify({
+          type: 'success',
+          message: `批量重试完成！共处理 ${result.total_documents} 个文档，成功 ${result.success_count} 个，失败 ${result.error_count} 个`,
+        })
+        // 刷新文档列表
+        invalidDocumentList()
+        setTimerCanRun(true)
+      }
+ else {
+        Toast.notify({ type: 'error', message: result.message || '批量重试失败' })
+      }
+    }
+ catch (error) {
+      console.error('Failed to retry all documents:', error)
+      Toast.notify({ type: 'error', message: '批量重试失败，请稍后重试' })
+    }
+ finally {
+      setIsRetryingAll(false)
+    }
+  }
+
   return (
     <div className='flex h-full flex-col overflow-y-auto'>
       <div className='flex flex-col justify-center gap-1 px-6 pt-4'>
@@ -297,14 +365,60 @@ const Documents: FC<IDocumentsProps> = ({ datasetId }) => {
       </div>
       <div className='flex flex-1 flex-col px-6 py-4'>
         <div className='flex flex-wrap items-center justify-between'>
-          <Input
-            showLeftIcon
-            showClearIcon
-            wrapperClassName='!w-[200px]'
-            value={inputValue}
-            onChange={e => handleInputChange(e.target.value)}
-            onClear={() => handleInputChange('')}
-          />
+          <div className='flex items-center gap-2'>
+            <Input
+              showLeftIcon
+              showClearIcon
+              wrapperClassName='!w-[200px]'
+              value={inputValue}
+              onChange={e => handleInputChange(e.target.value)}
+              onClear={() => handleInputChange('')}
+            />
+            {/* 状态过滤下拉菜单 */}
+            <div className="status-filter-container relative">
+              <button
+                type="button"
+                className="flex h-8 w-32 items-center justify-between rounded-lg border border-components-panel-border bg-components-input-bg-normal px-3 py-1.5 text-sm text-text-secondary shadow-sm hover:bg-state-base-hover focus:outline-none"
+                onClick={() => setShowStatusFilter(!showStatusFilter)}
+              >
+                <span className="truncate">
+                  {selectedStatus.length === 0 ? '过滤状态' : `已选择 ${selectedStatus.length} 项`}
+                </span>
+                <RiFilterLine className="h-4 w-4" />
+              </button>
+
+              {showStatusFilter && (
+                <div className="absolute z-10 mt-1 w-48 rounded-md border border-components-panel-border bg-components-panel-bg-blur p-2 shadow-lg backdrop-blur-sm">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="text-xs font-medium text-text-secondary">选择状态</span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedStatus([])}
+                      className="hover:text-text-accent-hover text-xs text-text-accent"
+                    >
+                      清除所有
+                    </button>
+                  </div>
+                  {statusOptions.map(option => (
+                    <label key={option.value} className="flex cursor-pointer items-center rounded px-2 py-1.5 hover:bg-state-base-hover">
+                      <input
+                        type="checkbox"
+                        checked={selectedStatus.includes(option.value)}
+                        onChange={(e) => {
+                          if (e.target.checked)
+                            setSelectedStatus([...selectedStatus, option.value])
+                           else
+                            setSelectedStatus(selectedStatus.filter(s => s !== option.value))
+                        }}
+                        className="mr-2 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="text-sm text-text-secondary">{option.label}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
           <div className='flex !h-8 items-center justify-center gap-2'>
             {!isFreePlan && <AutoDisabledDocument datasetId={datasetId} />}
             <IndexFailed datasetId={datasetId} />
@@ -313,7 +427,7 @@ const Documents: FC<IDocumentsProps> = ({ datasetId }) => {
               <Button
                 variant='secondary'
                 className='shrink-0'
-                onClick={handleRetryAllDocs}
+                onClick={handleRetryAll}
                 disabled={isRetryingAll}
               >
                 <RiRefreshLine className={cn('mr-1 size-4', isRetryingAll && 'animate-spin')} />

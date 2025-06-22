@@ -146,6 +146,10 @@ class DatasetDocumentListApi(Resource):
         limit = request.args.get("limit", default=20, type=int)
         search = request.args.get("keyword", default=None, type=str)
         sort = request.args.get("sort", default="-created_at", type=str)
+        
+        # 添加状态过滤参数
+        status_filter = request.args.getlist("status")  # 获取多个状态值
+        
         # "yes", "true", "t", "y", "1" convert to True, while others convert to False.
         try:
             fetch_val = request.args.get("fetch", default="false")
@@ -177,6 +181,15 @@ class DatasetDocumentListApi(Resource):
         if search:
             search = f"%{search}%"
             query = query.filter(Document.name.like(search))
+
+        # 添加状态过滤
+        if status_filter:
+            # 验证状态值是否有效
+            valid_statuses = ['waiting', 'parsing', 'cleaning', 'splitting', 'indexing', 'paused', 'error', 
+                              'completed', 'archived']
+            filtered_statuses = [status for status in status_filter if status in valid_statuses]
+            if filtered_statuses:
+                query = query.filter(Document.indexing_status.in_(filtered_statuses))
 
         if sort.startswith("-"):
             sort_logic = desc

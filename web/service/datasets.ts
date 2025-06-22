@@ -5,6 +5,7 @@ import type {
   CreateDocumentReq,
   DataSet,
   DataSetListResponse,
+  DocumentListResponse,
   ErrorDocsResponse,
   ExternalAPIDeleteResponse,
   ExternalAPIItem,
@@ -13,6 +14,7 @@ import type {
   ExternalKnowledgeBaseHitTestingResponse,
   ExternalKnowledgeItem,
   FetchDatasetsParams,
+  FetchDocumentsParams,
   FileIndexingEstimateResponse,
   HitTestingRecordsResponse,
   HitTestingResponse,
@@ -300,4 +302,25 @@ type RetryAllDocsResponse = {
 // 批量重试所有非完成状态的文档
 export const retryAllDocs: Fetcher<RetryAllDocsResponse, { datasetId: string }> = ({ datasetId }) => {
   return post<RetryAllDocsResponse>(`/datasets/${datasetId}/documents/retry-all`, {})
+}
+
+export const fetchDocuments: Fetcher<DocumentListResponse, { datasetId: string; params: FetchDocumentsParams }> = ({ datasetId, params }) => {
+  const searchParams = new URLSearchParams()
+  if (params.keyword)
+    searchParams.append('keyword', params.keyword)
+  if (params.page)
+    searchParams.append('page', params.page.toString())
+  if (params.limit)
+    searchParams.append('limit', params.limit.toString())
+  if (params.sort)
+    searchParams.append('sort', params.sort)
+
+  // 添加状态过滤参数
+  if (params.status && params.status.length > 0) {
+    params.status.forEach((status) => {
+      searchParams.append('status', status)
+    })
+  }
+
+  return get<DocumentListResponse>(`/datasets/${datasetId}/documents?${searchParams.toString()}`)
 }

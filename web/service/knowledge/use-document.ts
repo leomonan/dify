@@ -19,16 +19,27 @@ export const useDocumentList = (payload: {
     page: number
     limit: number
     sort?: SortType
+    status?: string[]
   },
   refetchInterval?: number | false
 }) => {
   const { query, datasetId, refetchInterval } = payload
-  const { keyword, page, limit, sort } = query
+  const { keyword, page, limit, sort, status } = query
+
   return useQuery<DocumentListResponse>({
-    queryKey: [...useDocumentListKey, datasetId, keyword, page, limit, sort],
-    queryFn: () => get<DocumentListResponse>(`/datasets/${datasetId}/documents`, {
-      params: query,
-    }),
+    queryKey: [...useDocumentListKey, datasetId, keyword, page, limit, sort, status],
+    queryFn: () => {
+      // 构建URL参数，支持多个status值
+      const searchParams = new URLSearchParams()
+      searchParams.append('keyword', keyword)
+      searchParams.append('page', page.toString())
+      searchParams.append('limit', limit.toString())
+      if (sort) searchParams.append('sort', sort)
+      if (status && status.length > 0)
+        status.forEach(s => searchParams.append('status', s))
+
+      return get<DocumentListResponse>(`/datasets/${datasetId}/documents?${searchParams.toString()}`)
+    },
     refetchInterval,
   })
 }
