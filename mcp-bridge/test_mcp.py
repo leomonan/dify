@@ -48,14 +48,17 @@ async def test_dify_tools():
             print(f"✅ 多数据集搜索完成，{len(multi_results)} 个数据集有结果")
             
         print("\n✅ 所有测试完成!")
+        return 0  # 成功时返回 0
         
     except Exception as e:
         print(f"❌ 测试失败: {e}")
         import traceback
         traceback.print_exc()
+        return 1  # 失败时返回 1
     
     finally:
         await client.close()
 
 if __name__ == "__main__":
-    asyncio.run(test_dify_tools()) 
+    exit_code = asyncio.run(test_dify_tools())
+    sys.exit(exit_code)  # 使用sys.exit确保脚本以正确的退出码结束 

@@ -140,12 +140,12 @@
 ### 修改文件
 
 1. **后端文件**:
-   - `mcp/third-party/dify-local/dify/api/controllers/console/datasets/datasets_document.py`
+   - `mcp/third-party/dify/api/controllers/console/datasets/datasets_document.py`
 
 2. **前端文件**:
-   - `mcp/third-party/dify-local/dify/web/service/datasets.ts`
-   - `mcp/third-party/dify-local/dify/web/models/datasets.ts`
-   - `mcp/third-party/dify-local/dify/web/app/components/datasets/documents/index.tsx`
+   - `mcp/third-party/dify/web/service/datasets.ts`
+   - `mcp/third-party/dify/web/models/datasets.ts`
+   - `mcp/third-party/dify/web/app/components/datasets/documents/index.tsx`
 
 ## 使用方法
 

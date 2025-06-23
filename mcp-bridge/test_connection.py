@@ -35,7 +35,7 @@ async def test_basic_connection():
         logger.info("💡 请复制 env.example 为 .env 并填写正确的配置")
     
     base_url = os.getenv("DIFY_API_URL", "http://127.0.0.1:5001/v1")
-    api_key = os.getenv("DIFY_API_KEY")
+    api_key = os.getenv("DIFY_API_KEY","dataset-Cum968WkXxtIp8RImIrjTUNA")
     
     logger.info(f"API URL: {base_url}")
     if api_key:

@@ -91,11 +91,11 @@ mcp-bridge/
 ```json
 {
   "mcpServers": {
-    "dify-local": {
+    "dify-knowledge": {
       "command": "python",
       "args": ["/path/to/dify-mcp-bridge/src/mcp_server.py"],
       "env": {
-        "DIFY_API_URL": "http://localhost:5001",
+        "DIFY_API_URL": "http://127.0.0.1:5001/v1",
         "DIFY_API_KEY": "your-dify-api-key"
       }
     }
@@ -106,7 +106,7 @@ mcp-bridge/
 ### 3.2 环境变量配置
 ```bash
 # 在 ~/.bashrc 或 ~/.zshrc 中添加
-export DIFY_API_URL="http://localhost:5001"
+export DIFY_API_URL="http://127.0.0.1:5001/v1"
 export DIFY_API_KEY="your-generated-api-key"
 export DIFY_MCP_BRIDGE_PATH="/path/to/dify-mcp-bridge"
 ```
@@ -115,11 +115,11 @@ export DIFY_MCP_BRIDGE_PATH="/path/to/dify-mcp-bridge"
 
 ### 4.1 功能测试
 1. **知识库搜索测试**
-   - 在 Cursor 中输入：`@dify-local search "UniApp X 状态管理"`
+   - 在 Cursor 中输入：`@dify-knowledge search "UniApp X 状态管理"`
    - 验证能否返回相关文档内容
 
 2. **对话功能测试**
-   - 在 Cursor 中输入：`@dify-local chat "如何在 UniApp X 中实现组件通信?"`
+   - 在 Cursor 中输入：`@dify-knowledge chat "如何在 UniApp X 中实现组件通信?"`
    - 验证能否获得智能回答
 
 3. **资源列表测试**
