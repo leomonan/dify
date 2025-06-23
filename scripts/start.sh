@@ -143,7 +143,6 @@ start_docker_daemon() {
 START_DOCKER=true
 START_API=true
 START_WEB=true
-START_MCP=true
 BACKGROUND=true
 FORCE=false
 
@@ -155,28 +154,24 @@ if [ "$SCRIPT_SOURCED" = false ]; then
                 START_DOCKER=false
                 START_API=true
                 START_WEB=false
-                START_MCP=false
                 shift
                 ;;
             -w|--web-only)
                 START_DOCKER=false
                 START_API=false
                 START_WEB=true
-                START_MCP=false
                 shift
                 ;;
             -m|--mcp-only)
                 START_DOCKER=false
                 START_API=false
                 START_WEB=false
-                START_MCP=true
                 shift
                 ;;
             -d|--docker-only)
                 START_DOCKER=true
                 START_API=false
                 START_WEB=false
-                START_MCP=false
                 shift
                 ;;
             -b|--background)
@@ -225,7 +220,7 @@ start_docker_services() {
     
     # 启动中间件服务
     echo "🚀 启动Docker中间件服务..."
-    docker-compose -f docker-compose.middleware.yaml up -d
+    docker compose -f docker-compose.middleware.yaml up -d
     if [ $? -ne 0 ]; then
         echo "❌ Docker中间件服务启动失败"
         return 1
@@ -274,7 +269,8 @@ start_api_service() {
         
         # 启动Celery Worker
         echo "🔧 后台启动Celery Worker..."
-        nohup uv run celery -A app.celery worker -P gevent -c 1 > "$DIFY_DIR/logs/celery.log" 2>&1 &
+        nohup uv run celery -A app.celery worker -P gevent -c 1 --loglevel INFO -Q dataset,generation,mail,ops_trace > "$DIFY_DIR/logs/celery.log" 2>&1 &
+        
         CELERY_PID=$!
         echo $CELERY_PID > "$DIFY_DIR/logs/celery.pid"
         echo "✅ Celery Worker已在后台启动 (PID: $CELERY_PID)"
@@ -327,47 +323,6 @@ start_web_service() {
     return 0
 }
 
-start_mcp_service() {
-    echo "🌉 启动MCP Bridge..."
-    cd "$MCP_BRIDGE_DIR"
-    
-    if [ ! -d ".venv" ]; then
-        echo "❌ MCP Bridge虚拟环境不存在，请先运行部署脚本"
-        return 1
-    fi
-    
-    # 激活虚拟环境
-    source .venv/bin/activate
-    
-    # 检查环境变量
-    if [ -z "$DIFY_API_KEY" ]; then
-        echo "⚠️ DIFY_API_KEY未设置，MCP Bridge可能无法正常工作"
-        echo "   请在Dify管理界面生成API密钥并设置到 $DIFY_DIR/.env 文件中"
-    fi
-    
-    # 设置环境变量
-    export DIFY_API_URL="${DIFY_API_URL:-http://localhost:5001}"
-    export DIFY_API_KEY="${DIFY_API_KEY}"
-    
-    if [ "$BACKGROUND" = true ]; then
-        echo "🌉 后台启动MCP Bridge..."
-        nohup python -m src.mcp_server > "$DIFY_DIR/logs/mcp.log" 2>&1 &
-        MCP_PID=$!
-        echo $MCP_PID > "$DIFY_DIR/logs/mcp.pid"
-        echo "✅ MCP Bridge已在后台启动 (PID: $MCP_PID)"
-        echo "   配置位置: .cursor/mcp.json"
-        echo "   日志文件: $DIFY_DIR/logs/mcp.log"
-    else
-        echo "✅ MCP Bridge启动中..."
-        echo "   配置位置: .cursor/mcp.json"
-        echo "   按 Ctrl+C 停止服务"
-        python -m src.mcp_server
-    fi
-    
-    cd "$DIFY_DIR"
-    return 0
-}
-
 # 以下是主要执行逻辑，仅当脚本被直接执行时运行
 if [ "$SCRIPT_SOURCED" = false ]; then
     # 检查环境
@@ -376,11 +331,6 @@ if [ "$SCRIPT_SOURCED" = false ]; then
     # 检查基本目录结构
     if [ ! -d "$DIFY_DIR" ] && [ "$START_API" = true -o "$START_WEB" = true ]; then
         echo "❌ Dify项目目录不存在，请先运行部署脚本: ./scripts/deploy.sh"
-        exit 1
-    fi
-
-    if [ ! -d "$MCP_BRIDGE_DIR" ] && [ "$START_MCP" = true ]; then
-        echo "❌ MCP Bridge目录不存在，请先运行部署脚本: ./scripts/deploy.sh"
         exit 1
     fi
 
@@ -395,7 +345,7 @@ if [ "$SCRIPT_SOURCED" = false ]; then
             echo "🔄 Docker服务未运行，尝试自动启动..."
             if ! start_docker_daemon; then
                 echo "❌ 无法自动启动Docker服务，请手动启动Docker后再运行脚本"
-                exit 1
+            exit 1
             fi
         fi
         echo "✅ Docker服务正常"
@@ -436,13 +386,6 @@ if [ "$SCRIPT_SOURCED" = false ]; then
         fi
     fi
 
-    # 4. 启动MCP Bridge（如果需要）
-    if [ "$START_MCP" = true ]; then
-        if ! start_mcp_service; then
-            FAILED_SERVICES+=("MCP Bridge")
-        fi
-    fi
-
     # 显示启动结果
     echo ""
     if [ ${#FAILED_SERVICES[@]} -eq 0 ]; then
@@ -462,17 +405,12 @@ if [ "$SCRIPT_SOURCED" = false ]; then
             echo "   🌐 Web界面: http://localhost:3000"
         fi
         
-        if [ "$START_MCP" = true ]; then
-            echo "   🌉 MCP Bridge: 通过Cursor IDE连接"
-        fi
-        
         if [ "$BACKGROUND" = true ]; then
             echo ""
             echo "📄 日志文件:"
             [ "$START_API" = true ] && echo "   API服务: $DIFY_DIR/logs/api.log"
             [ "$START_API" = true ] && echo "   Celery Worker: $DIFY_DIR/logs/celery.log"
             [ "$START_WEB" = true ] && echo "   Web界面: $DIFY_DIR/logs/web.log"
-            [ "$START_MCP" = true ] && echo "   MCP Bridge: $DIFY_DIR/logs/mcp.log"
             echo ""
             echo "🛑 停止服务:"
             echo "   执行: ./scripts/stop.sh"

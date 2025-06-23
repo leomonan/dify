@@ -65,8 +65,6 @@ echo "🛑 正在停止 Dify MCP 服务..."
 
 # 定义路径
 
-MCP_BRIDGE_DIR="$DIFY_DIR/mcp-bridge"
-
 # 停止服务函数
 stop_service_by_pid() {
     local service_name="$1"
@@ -136,37 +134,22 @@ stop_service_by_pattern() {
     fi
 }
 
-# 1. 停止MCP Bridge
-echo "🌉 停止MCP Bridge..."
-if [ -f "$DIFY_DIR/logs/mcp.pid" ]; then
-    stop_service_by_pid "MCP Bridge" "$DIFY_DIR/logs/mcp.pid"
-else
-    stop_service_by_pattern "MCP Bridge" "dify-mcp\|src\.mcp_server"
-fi
-
 # 2. 停止Web界面
 echo "🌐 停止Dify Web界面..."
-if [ -f "$DIFY_DIR/logs/web.pid" ]; then
-    stop_service_by_pid "Web界面" "$DIFY_DIR/logs/web.pid"
-else
-    stop_service_by_pattern "Web界面" "pnpm.*start\|next.*start"
-fi
+# stop_service_by_pid "Web界面" "$DIFY_DIR/logs/web.pid"
+stop_service_by_pattern "Web界面" "next-server"
+
 
 # 3. 停止Celery Worker
 echo "🔧 停止Celery Worker..."
-if [ -f "$DIFY_DIR/logs/celery.pid" ]; then
-    stop_service_by_pid "Celery Worker" "$DIFY_DIR/logs/celery.pid"
-else
-    stop_service_by_pattern "Celery Worker" "celery.*worker"
-fi
+# stop_service_by_pid "Celery Worker" "$DIFY_DIR/logs/celery.pid"
+stop_service_by_pattern "Celery Worker" "celery.*worker"
 
 # 4. 停止API服务
 echo "🔧 停止Dify API服务..."
-if [ -f "$DIFY_DIR/logs/api.pid" ]; then
-    stop_service_by_pid "API服务" "$DIFY_DIR/logs/api.pid"
-else
-    stop_service_by_pattern "API服务" "flask.*run.*5001"
-fi
+# stop_service_by_pid "API服务" "$DIFY_DIR/logs/api.pid"
+stop_service_by_pattern "API服务" "flask.*run.*5001"
+
 
 # 5. 停止Docker中间件服务
 echo "🐳 停止Docker中间件服务..."
@@ -193,7 +176,7 @@ if [ "$FORCE" = true ]; then
     echo "💀 强制清理所有相关进程..."
     
     # 清理可能遗留的Python进程
-    local python_pids=$(pgrep -f "python.*dify\|python.*mcp" || true)
+    python_pids=$(pgrep -f "python.*dify\|python.*mcp" || true)
     if [ -n "$python_pids" ]; then
         echo "🔄 清理Python相关进程: $python_pids"
         for pid in $python_pids; do
@@ -202,7 +185,7 @@ if [ "$FORCE" = true ]; then
     fi
     
     # 清理可能遗留的Node.js进程
-    local node_pids=$(pgrep -f "node.*next\|pnpm.*start" || true)
+    node_pids=$(pgrep -f "node.*next\|pnpm.*start" || true)
     if [ -n "$node_pids" ]; then
         echo "🔄 清理Node.js相关进程: $node_pids"
         for pid in $node_pids; do
@@ -224,14 +207,7 @@ echo "🔍 验证停止结果..."
 STOPPED_SERVICES=()
 REMAINING_SERVICES=()
 
-# 检查各服务状态
-if ! pgrep -f "dify-mcp\|src\.mcp_server" > /dev/null; then
-    STOPPED_SERVICES+=("MCP Bridge")
-else
-    REMAINING_SERVICES+=("MCP Bridge")
-fi
-
-if ! pgrep -f "pnpm.*start\|next.*start" > /dev/null; then
+if ! pgrep -f "next-server" > /dev/null; then
     STOPPED_SERVICES+=("Web界面")
 else
     REMAINING_SERVICES+=("Web界面")
