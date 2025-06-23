@@ -12,10 +12,10 @@ fi
 echo "✅ Python 3 已安装: $(python3 --version)"
 
 # 创建虚拟环境
-echo "🔧 创建虚拟环境..."
+    echo "🔧 创建虚拟环境..."
 python3 -m venv .venv
 source .venv/bin/activate
-echo "✅ 虚拟环境已激活"
+    echo "✅ 虚拟环境已激活"
 
 # 安装依赖
 echo "📦 安装 Python 依赖..."

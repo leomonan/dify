@@ -135,6 +135,102 @@ class DifyMCPServer:
                         },
                         "required": ["dataset_id"]
                     }
+                ),
+                Tool(
+                    name="dify_create_dataset",
+                    description="创建新的Dify知识库数据集",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string",
+                                "description": "知识库名称"
+                            },
+                            "description": {
+                                "type": "string",
+                                "description": "知识库描述",
+                                "default": ""
+                            },
+                            "indexing_technique": {
+                                "type": "string",
+                                "description": "索引方式",
+                                "enum": ["high_quality", "economy"],
+                                "default": "high_quality"
+                            },
+                            "permission": {
+                                "type": "string",
+                                "description": "权限设置",
+                                "enum": ["only_me", "all_team_members", "partial_members"],
+                                "default": "only_me"
+                            },
+                            "embedding_model": {
+                                "type": "string",
+                                "description": "Embedding模型名称（可选）"
+                            },
+                            "embedding_model_provider": {
+                                "type": "string",
+                                "description": "Embedding模型供应商（可选）"
+                            }
+                        },
+                        "required": ["name"]
+                    }
+                ),
+                Tool(
+                    name="dify_create_document",
+                    description="向Dify知识库添加文档",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "dataset_id": {
+                                "type": "string",
+                                "description": "知识库ID"
+                            },
+                            "name": {
+                                "type": "string",
+                                "description": "文档名称"
+                            },
+                            "text": {
+                                "type": "string",
+                                "description": "文档内容"
+                            },
+                            "indexing_technique": {
+                                "type": "string",
+                                "description": "索引方式",
+                                "enum": ["high_quality", "economy"],
+                                "default": "high_quality"
+                            },
+                            "doc_form": {
+                                "type": "string",
+                                "description": "文档形式",
+                                "enum": ["text_model", "hierarchical_model", "qa_model"],
+                                "default": "text_model"
+                            },
+                            "doc_language": {
+                                "type": "string",
+                                "description": "文档语言",
+                                "default": "Chinese"
+                            }
+                        },
+                        "required": ["dataset_id", "name", "text"]
+                    }
+                ),
+                Tool(
+                    name="dify_get_indexing_status",
+                    description="获取文档索引状态",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "dataset_id": {
+                                "type": "string",
+                                "description": "知识库ID"
+                            },
+                            "batch": {
+                                "type": "string",
+                                "description": "批次号"
+                            }
+                        },
+                        "required": ["dataset_id", "batch"]
+                    }
                 )
             ]
 
@@ -163,6 +259,12 @@ class DifyMCPServer:
                     return await self._handle_get_dataset_info(arguments)
                 elif name == "dify_search_documents":
                     return await self._handle_search_documents(arguments)
+                elif name == "dify_create_dataset":
+                    return await self._handle_create_dataset(arguments)
+                elif name == "dify_create_document":
+                    return await self._handle_create_document(arguments)
+                elif name == "dify_get_indexing_status":
+                    return await self._handle_get_indexing_status(arguments)
                 else:
                     return [TextContent(
                         type="text",
@@ -334,6 +436,135 @@ class DifyMCPServer:
         result += "⚠️ **注意**: 此API仅返回文档元数据，不包含文档内容。如需搜索文档内容，请使用`dify_search_knowledge`工具。\n"
         
         return [TextContent(type="text", text=result)]
+
+    async def _handle_create_dataset(self, arguments: Dict[str, Any]) -> List[TextContent]:
+        """处理创建数据集请求"""
+        name = arguments["name"]
+        description = arguments.get("description", "")
+        indexing_technique = arguments.get("indexing_technique", "high_quality")
+        permission = arguments.get("permission", "only_me")
+        embedding_model = arguments.get("embedding_model")
+        embedding_model_provider = arguments.get("embedding_model_provider")
+        
+        try:
+            dataset = await self.client.create_dataset(
+                name=name,
+                description=description,
+                indexing_technique=indexing_technique,
+                permission=permission,
+                embedding_model=embedding_model,
+                embedding_model_provider=embedding_model_provider
+            )
+            
+            result = f"✅ **知识库创建成功**\n\n"
+            result += f"**名称**: {dataset.get('name', '未知')}\n"
+            result += f"**ID**: `{dataset.get('id', '')}`\n"
+            result += f"**描述**: {dataset.get('description', '无描述')}\n"
+            result += f"**索引方式**: {dataset.get('indexing_technique', '未设置')}\n"
+            result += f"**权限**: {dataset.get('permission', '未设置')}\n"
+            result += f"**创建时间**: {dataset.get('created_at', '')}\n"
+            
+            return [TextContent(type="text", text=result)]
+            
+        except Exception as e:
+            return [TextContent(
+                type="text",
+                text=f"❌ 创建知识库失败: {str(e)}"
+            )]
+
+    async def _handle_create_document(self, arguments: Dict[str, Any]) -> List[TextContent]:
+        """处理创建文档请求"""
+        dataset_id = arguments["dataset_id"]
+        name = arguments["name"]
+        text = arguments["text"]
+        indexing_technique = arguments.get("indexing_technique", "high_quality")
+        doc_form = arguments.get("doc_form", "text_model")
+        doc_language = arguments.get("doc_language", "Chinese")
+        
+        try:
+            document = await self.client.create_document_by_text(
+                dataset_id=dataset_id,
+                name=name,
+                text=text,
+                indexing_technique=indexing_technique,
+                doc_form=doc_form,
+                doc_language=doc_language
+            )
+            
+            doc_info = document.get("document", {})
+            batch = document.get("batch", "")
+            
+            result = f"✅ **文档创建成功**\n\n"
+            result += f"**文档名称**: {doc_info.get('name', '未知')}\n"
+            result += f"**文档ID**: `{doc_info.get('id', '')}`\n"
+            result += f"**批次号**: `{batch}`\n"
+            result += f"**索引状态**: {doc_info.get('indexing_status', '未知')}\n"
+            result += f"**显示状态**: {doc_info.get('display_status', '未知')}\n"
+            result += f"**文档形式**: {doc_info.get('doc_form', '未知')}\n"
+            result += f"**字数**: {doc_info.get('word_count', 0)}\n"
+            result += f"**创建时间**: {doc_info.get('created_at', '')}\n\n"
+            
+            if batch:
+                result += f"💡 **提示**: 可使用批次号 `{batch}` 查询索引进度\n"
+                result += f"   命令: `dify_get_indexing_status` 参数: dataset_id=`{dataset_id}`, batch=`{batch}`"
+            
+            return [TextContent(type="text", text=result)]
+            
+        except Exception as e:
+            return [TextContent(
+                type="text",
+                text=f"❌ 创建文档失败: {str(e)}"
+            )]
+
+    async def _handle_get_indexing_status(self, arguments: Dict[str, Any]) -> List[TextContent]:
+        """处理获取索引状态请求"""
+        dataset_id = arguments["dataset_id"]
+        batch = arguments["batch"]
+        
+        try:
+            status_response = await self.client.get_indexing_status(dataset_id, batch)
+            status_data = status_response.get("data", [])
+            
+            if not status_data:
+                return [TextContent(
+                    type="text",
+                    text=f"📄 未找到批次 `{batch}` 的索引状态"
+                )]
+            
+            result = f"📊 **文档索引状态 (批次: {batch})**\n\n"
+            
+            for i, doc_status in enumerate(status_data, 1):
+                doc_id = doc_status.get("id", "未知")
+                indexing_status = doc_status.get("indexing_status", "未知")
+                completed_segments = doc_status.get("completed_segments", 0)
+                total_segments = doc_status.get("total_segments", 0)
+                error = doc_status.get("error")
+                
+                result += f"**文档 {i}** (ID: `{doc_id}`)\n"
+                result += f"   - 索引状态: {indexing_status}\n"
+                
+                if total_segments > 0:
+                    progress = (completed_segments / total_segments) * 100
+                    result += f"   - 进度: {completed_segments}/{total_segments} ({progress:.1f}%)\n"
+                
+                if error:
+                    result += f"   - ❌ 错误: {error}\n"
+                
+                # 时间戳
+                if doc_status.get("processing_started_at"):
+                    result += f"   - 开始时间: {doc_status.get('processing_started_at')}\n"
+                if doc_status.get("completed_at"):
+                    result += f"   - 完成时间: {doc_status.get('completed_at')}\n"
+                
+                result += "\n"
+            
+            return [TextContent(type="text", text=result)]
+            
+        except Exception as e:
+            return [TextContent(
+                type="text",
+                text=f"❌ 获取索引状态失败: {str(e)}"
+            )]
 
     async def cleanup(self):
         """清理资源"""

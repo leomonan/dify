@@ -203,6 +203,9 @@ class DatasetDocumentListApi(Resource):
             is_enabled = enabled_filter.lower() in ("yes", "true", "t", "y", "1")
             query = query.filter(Document.enabled == is_enabled)
 
+        logging.warning(f"DEBUG - status_filter: {status_filter}, archived_filter: {archived_filter}, \
+                        enabled_filter: {enabled_filter}")
+
         if sort.startswith("-"):
             sort_logic = desc
             sort = sort[1:]

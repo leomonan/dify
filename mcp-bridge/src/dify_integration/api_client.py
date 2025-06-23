@@ -274,6 +274,76 @@ class DifyAPIClient:
         if self.session and not self.session.closed:
             await self.session.close()
     
+    async def create_dataset(
+        self,
+        name: str,
+        description: str = "",
+        indexing_technique: str = "high_quality",
+        permission: str = "only_me",
+        embedding_model: Optional[str] = None,
+        embedding_model_provider: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """创建知识库数据集
+        
+        参考官方文档: POST /datasets
+        """
+        payload = {
+            "name": name,
+            "description": description,
+            "indexing_technique": indexing_technique,
+            "permission": permission
+        }
+        
+        if embedding_model:
+            payload["embedding_model"] = embedding_model
+        if embedding_model_provider:
+            payload["embedding_model_provider"] = embedding_model_provider
+            
+        return await self._make_request("POST", "/datasets", data=payload)
+
+    async def create_document_by_text(
+        self,
+        dataset_id: str,
+        name: str,
+        text: str,
+        indexing_technique: str = "high_quality",
+        doc_form: str = "text_model",
+        doc_language: str = "Chinese",
+        process_rule: Optional[Dict] = None
+    ) -> Dict[str, Any]:
+        """通过文本创建文档
+        
+        参考官方文档: POST /datasets/{dataset_id}/document/create-by-text
+        """
+        payload = {
+            "name": name,
+            "text": text,
+            "indexing_technique": indexing_technique,
+            "doc_form": doc_form,
+            "doc_language": doc_language,
+            "process_rule": process_rule or {"mode": "automatic"}
+        }
+        
+        return await self._make_request(
+            "POST", 
+            f"/datasets/{dataset_id}/document/create-by-text",
+            data=payload
+        )
+
+    async def get_indexing_status(
+        self,
+        dataset_id: str,
+        batch: str
+    ) -> Dict[str, Any]:
+        """获取文档索引状态
+        
+        参考官方文档: GET /datasets/{dataset_id}/documents/{batch}/indexing-status
+        """
+        return await self._make_request(
+            "GET",
+            f"/datasets/{dataset_id}/documents/{batch}/indexing-status"
+        )
+    
     async def __aenter__(self):
         """异步上下文管理器入口"""
         return self
