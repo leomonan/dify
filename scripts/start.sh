@@ -2,7 +2,7 @@
 # Dify MCP 启动脚本
 # 文件名: start.sh
 # 描述: 启动Dify本地环境和MCP Bridge服务
-# 最后更新日期: 2025年6月23日星期一 10:13:16
+# 最后更新日期: 2025年6月24日星期一 15:30:45
 
 # 检测脚本是否被直接执行还是被导入
 # 如果被导入，BASH_SOURCE和$0不同
@@ -46,6 +46,97 @@ show_usage() {
     echo "  $0 -a                 # 只启动API服务"
     echo "  $0 -w -b              # 后台启动Web界面"
     echo "  $0 -d                 # 只启动Docker中间件"
+}
+
+# 自动启动Docker服务
+start_docker_daemon() {
+    echo "🔄 尝试自动启动Docker服务..."
+    
+    # 检测操作系统类型
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        # macOS
+        echo "📱 检测到macOS系统"
+        if command -v open &> /dev/null; then
+            echo "🚀 启动Docker Desktop..."
+            open -a Docker
+            
+            # 等待Docker启动
+            echo "⏳ 等待Docker服务启动，最多等待60秒..."
+            for i in {1..12}; do
+                sleep 5
+                if docker info &> /dev/null; then
+                    echo "✅ Docker服务已成功启动"
+                    return 0
+                fi
+                echo "⏳ 等待Docker启动中... ($((i*5))秒)"
+            done
+        else
+            echo "❌ 无法启动Docker Desktop，请手动启动"
+            return 1
+        fi
+    elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        # Linux
+        echo "🐧 检测到Linux系统"
+        if command -v systemctl &> /dev/null; then
+            echo "🚀 启动Docker服务(systemd)..."
+            sudo systemctl start docker
+            
+            # 等待Docker启动
+            echo "⏳ 等待Docker服务启动，最多等待30秒..."
+            for i in {1..6}; do
+                sleep 5
+                if docker info &> /dev/null; then
+                    echo "✅ Docker服务已成功启动"
+                    return 0
+                fi
+                echo "⏳ 等待Docker启动中... ($((i*5))秒)"
+            done
+        elif command -v service &> /dev/null; then
+            echo "🚀 启动Docker服务(service)..."
+            sudo service docker start
+            
+            # 等待Docker启动
+            echo "⏳ 等待Docker服务启动，最多等待30秒..."
+            for i in {1..6}; do
+                sleep 5
+                if docker info &> /dev/null; then
+                    echo "✅ Docker服务已成功启动"
+                    return 0
+                fi
+                echo "⏳ 等待Docker启动中... ($((i*5))秒)"
+            done
+        else
+            echo "❌ 无法启动Docker服务，请手动启动"
+            return 1
+        fi
+    elif [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" ]]; then
+        # Windows
+        echo "🪟 检测到Windows系统"
+        if command -v powershell &> /dev/null; then
+            echo "🚀 启动Docker Desktop..."
+            powershell.exe -Command "Start-Process 'Docker Desktop'"
+            
+            # 等待Docker启动
+            echo "⏳ 等待Docker服务启动，最多等待60秒..."
+            for i in {1..12}; do
+                sleep 5
+                if docker info &> /dev/null; then
+                    echo "✅ Docker服务已成功启动"
+                    return 0
+                fi
+                echo "⏳ 等待Docker启动中... ($((i*5))秒)"
+            done
+        else
+            echo "❌ 无法启动Docker Desktop，请手动启动"
+            return 1
+        fi
+    else
+        echo "❓ 未知操作系统，无法自动启动Docker服务"
+        return 1
+    fi
+    
+    echo "❌ Docker服务启动超时，请手动启动"
+    return 1
 }
 
 # 默认参数
@@ -301,8 +392,11 @@ if [ "$SCRIPT_SOURCED" = false ]; then
         fi
         
         if ! docker info &> /dev/null; then
-            echo "❌ Docker服务未运行，请启动Docker"
-            exit 1
+            echo "🔄 Docker服务未运行，尝试自动启动..."
+            if ! start_docker_daemon; then
+                echo "❌ 无法自动启动Docker服务，请手动启动Docker后再运行脚本"
+                exit 1
+            fi
         fi
         echo "✅ Docker服务正常"
     fi
