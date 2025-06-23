@@ -34,7 +34,7 @@ async def test_basic_connection():
         logger.warning(f"⚠️ 未找到 .env 文件: {env_file}")
         logger.info("💡 请复制 env.example 为 .env 并填写正确的配置")
     
-    base_url = os.getenv("DIFY_API_URL", "http://localhost:5001")
+    base_url = os.getenv("DIFY_API_URL", "http://127.0.0.1:5001/v1")
     api_key = os.getenv("DIFY_API_KEY")
     
     logger.info(f"API URL: {base_url}")
@@ -111,7 +111,7 @@ async def test_search_functionality(datasets):
     else:
         load_dotenv()
     
-    base_url = os.getenv("DIFY_API_URL", "http://localhost:5001")
+    base_url = os.getenv("DIFY_API_URL", "http://127.0.0.1:5001/v1")
     api_key = os.getenv("DIFY_API_KEY")
     
     async with DifyAPIClient(base_url=base_url, api_key=api_key) as client:
@@ -170,7 +170,7 @@ async def test_multi_dataset_search(datasets):
     else:
         load_dotenv()
     
-    base_url = os.getenv("DIFY_API_URL", "http://localhost:5001")
+    base_url = os.getenv("DIFY_API_URL", "http://127.0.0.1:5001/v1")
     api_key = os.getenv("DIFY_API_KEY")
     
     async with DifyAPIClient(base_url=base_url, api_key=api_key) as client:

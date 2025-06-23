@@ -58,7 +58,7 @@ FastMCP Server (mcp_server.py)
     ↓ HTTP/REST API calls
 DifyAPIClient (api_client.py)
     ↓ HTTP requests
-Local Dify Instance (http://localhost:5001)
+Local Dify Instance (http://127.0.0.1:5001/v1)
     ↓ Database queries
 Knowledge Base (Vector DB + Documents)
 ```

@@ -20,7 +20,7 @@ cp env.example .env
 
 确保本地 Dify 服务已启动并可访问：
 - **前端**: http://localhost:3000  
-- **后端 API**: http://localhost:5001
+- **后端 API**: http://127.0.0.1:5001/v1
 
 ### 第三步：测试连接
 
@@ -66,7 +66,7 @@ python start_server.py
 ## 🔧 故障排除
 
 ### 问题：连接失败
-- 检查 Dify 服务是否运行在 http://localhost:5001
+- 检查 Dify 服务是否运行在 http://127.0.0.1:5001/v1
 - 检查 `.env` 文件中的 `DIFY_API_URL` 配置
 
 ### 问题：没有找到数据集

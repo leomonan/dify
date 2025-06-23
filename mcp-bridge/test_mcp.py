@@ -12,7 +12,7 @@ async def test_dify_tools():
     print("🧪 测试 Dify MCP 工具功能")
     
     # 设置环境变量
-    api_url = "http://localhost:5001"
+    api_url = "http://127.0.0.1:5001/v1"
     api_key = "dataset-Cum968WkXxtIp8RImIrjTUNA"
     
     print(f"API URL: {api_url}")

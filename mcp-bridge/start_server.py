@@ -32,7 +32,7 @@ def check_dify_connection():
     """检查 Dify 服务是否可访问"""
     import requests
     
-    dify_url = os.getenv("DIFY_API_URL", "http://localhost:5001")
+    dify_url = os.getenv("DIFY_API_URL", "http://127.0.0.1:5001/v1")
     try:
         response = requests.get(f"{dify_url}/health", timeout=5)
         if response.status_code == 200:

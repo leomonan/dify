@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 class DifyAPIClient:
     """Dify API 异步客户端"""
     
-    def __init__(self, base_url: str = "http://localhost:5001", api_key: Optional[str] = None):
+    def __init__(self, base_url: str = "http://127.0.0.1:5001/v1", api_key: Optional[str] = None):
         self.base_url = base_url.rstrip('/')
         self.api_key = api_key
         self.session: Optional[aiohttp.ClientSession] = None
@@ -119,20 +119,20 @@ class DifyAPIClient:
     async def get_datasets(self, page: int = 1, limit: int = 20) -> Dict[str, Any]:
         """获取数据集列表
         
-        参考官方文档: GET /v1/datasets
+        参考官方文档: GET /datasets
         """
         params = {
             "page": page,
             "limit": limit
         }
-        return await self._make_request("GET", "/v1/datasets", params=params)
+        return await self._make_request("GET", "/datasets", params=params)
     
     async def get_dataset(self, dataset_id: str) -> Dict[str, Any]:
         """获取单个数据集详情
         
-        参考官方文档: GET /v1/datasets/{dataset_id}
+        参考官方文档: GET /datasets/{dataset_id}
         """
-        return await self._make_request("GET", f"/v1/datasets/{dataset_id}")
+        return await self._make_request("GET", f"/datasets/{dataset_id}")
     
     async def search_dataset(
         self, 
@@ -142,7 +142,7 @@ class DifyAPIClient:
     ) -> Dict[str, Any]:
         """在指定数据集中执行检索测试
         
-        参考官方文档: POST /v1/datasets/{dataset_id}/retrieve
+        参考官方文档: POST /datasets/{dataset_id}/retrieve
         """
         # 尝试更简单的请求格式
         payload = {
@@ -155,7 +155,7 @@ class DifyAPIClient:
         
         return await self._make_request(
             "POST", 
-            f"/v1/datasets/{dataset_id}/retrieve",
+            f"/datasets/{dataset_id}/retrieve",
             data=payload
         )
     
@@ -224,7 +224,7 @@ class DifyAPIClient:
         
         return await self._make_request(
             "POST",
-            f"/v1/chat-messages",
+            f"/chat-messages",
             data=payload
         )
     
@@ -237,7 +237,7 @@ class DifyAPIClient:
     ) -> Dict[str, Any]:
         """获取数据集中的文档列表
         
-        参考官方文档: GET /v1/datasets/{dataset_id}/documents
+        参考官方文档: GET /datasets/{dataset_id}/documents
         """
         params = {
             "page": page,
@@ -248,7 +248,7 @@ class DifyAPIClient:
             
         return await self._make_request(
             "GET",
-            f"/v1/datasets/{dataset_id}/documents",
+            f"/datasets/{dataset_id}/documents",
             params=params
         )
     

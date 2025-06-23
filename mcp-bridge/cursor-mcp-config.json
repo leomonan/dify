@@ -1,12 +1,12 @@
 {
   "mcpServers": {
     "dify-knowledge": {
-      "command": "python",
-      "args": ["/path/to/order602/mcp-bridge/src/mcp_server.py"],
+      "command": "/Volumes/workspace/order602/mcp/third-party/dify/mcp-bridge/venv/bin/python",
+      "args": ["/Volumes/workspace/order602/mcp/third-party/dify/mcp-bridge/src/mcp_server.py"],
+      "cwd": "/Volumes/workspace/order602/mcp/third-party/dify/mcp-bridge",
       "env": {
-        "DIFY_API_URL": "http://localhost:5001",
-        "DIFY_API_KEY": "",
-        "LOG_LEVEL": "INFO"
+        "DIFY_API_URL": "http://127.0.0.1:5001/v1",
+        "DIFY_API_KEY": "dataset-Cum968WkXxtIp8RImIrjTUNA"
       }
     }
   }

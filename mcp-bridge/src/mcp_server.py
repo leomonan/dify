@@ -140,7 +140,7 @@ class DifyMCPServer:
             try:
                 if not self.client:
                     # 从环境变量获取配置
-                    api_url = os.getenv("DIFY_API_URL", "http://localhost:5001")
+                    api_url = os.getenv("DIFY_API_URL", "http://127.0.0.1:5001/v1")
                     api_key = os.getenv("DIFY_API_KEY")
                     
                     if not api_key:

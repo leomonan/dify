@@ -33,7 +33,7 @@ def main():
         template = """# Dify MCP Bridge 配置文件
 
 # Dify API 配置
-DIFY_API_URL=http://localhost:5001
+DIFY_API_URL=http://127.0.0.1:5001/v1
 DIFY_API_KEY=
 
 # 日志级别
@@ -46,7 +46,7 @@ MCP_SERVER_NAME=dify-knowledge-bridge
     print("\n📝 请提供以下配置信息：")
     
     # 获取 Dify API URL
-    default_url = "http://localhost:5001"
+    default_url = "http://127.0.0.1:5001/v1"
     api_url = input(f"Dify API URL (默认: {default_url}): ").strip()
     if not api_url:
         api_url = default_url
@@ -65,7 +65,7 @@ MCP_SERVER_NAME=dify-knowledge-bridge
         print("⚠️ 警告：未设置 API Key，某些功能可能无法使用")
     
     # 生成 .env 文件内容
-    env_content = template.replace("DIFY_API_URL=http://localhost:5001", f"DIFY_API_URL={api_url}")
+    env_content = template.replace("DIFY_API_URL=http://127.0.0.1:5001/v1", f"DIFY_API_URL={api_url}")
     env_content = env_content.replace("DIFY_API_KEY=", f"DIFY_API_KEY={api_key}")
     
     # 写入 .env 文件

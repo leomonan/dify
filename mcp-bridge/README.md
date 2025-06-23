@@ -32,7 +32,7 @@ cp env.example .env
 
 2. 编辑 `.env` 文件，配置 Dify API 地址：
 ```bash
-DIFY_API_URL=http://localhost:5001
+DIFY_API_URL=http://127.0.0.1:5001/v1
 DIFY_API_KEY=your-api-key-here
 ```
 
@@ -58,7 +58,7 @@ python src/mcp_server.py
       "command": "python",
       "args": ["/path/to/mcp-bridge/src/mcp_server.py"],
       "env": {
-        "DIFY_API_URL": "http://localhost:5001"
+        "DIFY_API_URL": "http://127.0.0.1:5001/v1"
       }
     }
   }

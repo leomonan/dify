@@ -5,7 +5,7 @@
 ## 1️⃣ 获取正确的 API Key
 
 1. **打开 Dify 管理后台**
-   - 浏览器访问：`http://localhost:5001`
+   - 浏览器访问：`http://127.0.0.1:5001/v1`
    - 登录到 Dify
 
 2. **进入知识库页面**
@@ -49,7 +49,7 @@ python test_connection.py
 
 1. **检查 Dify 是否在运行**
    ```bash
-   curl http://localhost:5001
+   curl http://127.0.0.1:5001/v1
    ```
 
 2. **确认 API Key 格式**

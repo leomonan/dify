@@ -43,7 +43,7 @@ DIFY_API_KEY=dataset-aBc123DeF456GhI789JkL012MnO345
 #### 1. 检查 Dify 服务状态
 ```bash
 # 检查 Dify 是否正在运行
-curl http://localhost:5001/health
+curl http://127.0.0.1:5001/v1/health
 
 # 如果使用 Docker
 docker ps | grep dify
@@ -52,7 +52,7 @@ docker ps | grep dify
 #### 2. 检查端口和 URL
 确保 `.env` 文件中的 URL 正确：
 ```
-DIFY_API_URL=http://localhost:5001
+DIFY_API_URL=http://127.0.0.1:5001/v1
 ```
 
 如果 Dify 运行在不同端口或服务器上，相应修改。
