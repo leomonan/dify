@@ -112,93 +112,19 @@ if [ "$SCRIPT_SOURCED" = false ]; then
 fi
 
 # 定义路径
-
 MCP_BRIDGE_DIR="$DIFY_DIR/mcp-bridge"
 DIFY_DATA_DIR="$PROJECT_ROOT/mcp/data/dify_data"
 
 # 服务启动函数
 start_docker_services() {
-    echo "🐳 准备启动Docker中间件服务..."
+    echo "🐳 启动Docker中间件服务..."
     
     # 检查Docker daemon是否运行
-    echo "🔍 检查Docker daemon状态..."
     if ! docker info >/dev/null 2>&1; then
-        echo "⚠️ Docker daemon未运行，尝试启动..."
-        
-        # 根据操作系统类型尝试启动Docker
-        case "$(uname -s)" in
-            Darwin)
-                # macOS系统 - 尝试启动Docker Desktop
-                echo "🍎 检测到macOS系统，尝试启动Docker Desktop..."
-                open -a Docker.app
-                
-                # 等待Docker启动
-                echo "⏳ 等待Docker启动 (最多60秒)..."
-                for i in {1..60}; do
-                    if docker info >/dev/null 2>&1; then
-                        echo "✅ Docker daemon已成功启动"
-                        break
-                    fi
-                    
-                    # 如果尝试了60秒仍然失败，则退出
-                    if [ $i -eq 60 ]; then
-                        echo "❌ Docker daemon启动失败，请手动启动Docker然后重试"
-                        return 1
-                    fi
-                    
-                    sleep 1
-                    echo -n "."
-                    if [ $((i % 10)) -eq 0 ]; then
-                        echo " $i秒"
-                    fi
-                done
-                ;;
-                
-            Linux)
-                # Linux系统 - 尝试使用systemd或service启动
-                echo "🐧 检测到Linux系统，尝试启动Docker服务..."
-                if command -v systemctl >/dev/null 2>&1; then
-                    sudo systemctl start docker
-                elif command -v service >/dev/null 2>&1; then
-                    sudo service docker start
-                else
-                    echo "❌ 无法自动启动Docker服务，请手动启动后重试"
-                    return 1
-                fi
-                
-                # 等待Docker启动
-                echo "⏳ 等待Docker启动 (最多30秒)..."
-                for i in {1..30}; do
-                    if docker info >/dev/null 2>&1; then
-                        echo "✅ Docker daemon已成功启动"
-                        break
-                    fi
-                    
-                    # 如果尝试了30秒仍然失败，则退出
-                    if [ $i -eq 30 ]; then
-                        echo "❌ Docker daemon启动失败，请手动启动Docker然后重试"
-                        return 1
-                    fi
-                    
-                    sleep 1
-                    echo -n "."
-                    if [ $((i % 10)) -eq 0 ]; then
-                        echo " $i秒"
-                    fi
-                done
-                ;;
-                
-            *)
-                # 其他操作系统
-                echo "❌ 未知操作系统，无法自动启动Docker，请手动启动Docker然后重试"
-                return 1
-                ;;
-        esac
-    else
-        echo "✅ Docker daemon已在运行"
+        echo "❌ Docker daemon未运行，请先启动Docker服务"
+        return 1
     fi
     
-    # 继续原有的Docker服务启动逻辑
     cd "$DIFY_DIR/docker"
     
     if [ ! -f "docker-compose.middleware.yaml" ]; then
@@ -332,21 +258,6 @@ start_mcp_service() {
     export DIFY_API_URL="${DIFY_API_URL:-http://localhost:5001}"
     export DIFY_API_KEY="${DIFY_API_KEY}"
     
-    # 测试API连接
-    echo "🧪 测试Dify API连接..."
-    if [ -f "test_mcp.py" ]; then
-        python test_mcp.py
-        TEST_RESULT=$?
-        if [ $TEST_RESULT -ne 0 ]; then
-            echo "⚠️ API连接测试失败，但仍将尝试启动MCP Bridge"
-            echo "   请确保Dify API服务已启动并配置正确"
-        else
-            echo "✅ API连接测试成功"
-        fi
-    else
-        echo "⚠️ 未找到测试脚本，跳过API连接测试"
-    fi
-    
     if [ "$BACKGROUND" = true ]; then
         echo "🌉 后台启动MCP Bridge..."
         nohup python -m src.mcp_server > "$DIFY_DIR/logs/mcp.log" 2>&1 &
@@ -419,11 +330,6 @@ if [ "$SCRIPT_SOURCED" = false ]; then
 
     # 2. 启动API服务（如果需要）
     if [ "$START_API" = true ]; then
-        if [ "$START_DOCKER" = true ]; then
-            echo "⏳ 等待Docker服务稳定..."
-            sleep 0.1
-        fi
-        
         if ! start_api_service; then
             FAILED_SERVICES+=("API服务")
         fi
@@ -431,11 +337,6 @@ if [ "$SCRIPT_SOURCED" = false ]; then
 
     # 3. 启动Web界面（如果需要）
     if [ "$START_WEB" = true ]; then
-        if [ "$START_API" = true ]; then
-            echo "⏳ 等待API服务启动..."
-            sleep 1
-        fi
-        
         if ! start_web_service; then
             FAILED_SERVICES+=("Web界面")
         fi
@@ -443,11 +344,6 @@ if [ "$SCRIPT_SOURCED" = false ]; then
 
     # 4. 启动MCP Bridge（如果需要）
     if [ "$START_MCP" = true ]; then
-        if [ "$START_API" = true ]; then
-            echo "⏳ 等待API服务稳定..."
-            sleep 1
-        fi
-        
         if ! start_mcp_service; then
             FAILED_SERVICES+=("MCP Bridge")
         fi
@@ -490,9 +386,7 @@ if [ "$SCRIPT_SOURCED" = false ]; then
         
         echo ""
         echo "💡 提示:"
-        echo "   - 首次使用需要在Dify管理界面创建应用和数据集"
-        echo "   - 需要生成API密钥并配置到 .env 文件中"
-        echo "   - MCP Bridge需要API密钥才能正常工作"
+        echo "   - 可以使用test.sh脚本测试服务: ./scripts/test.sh"
         
     else
         echo "❌ 部分服务启动失败:"
@@ -503,4 +397,4 @@ if [ "$SCRIPT_SOURCED" = false ]; then
         echo "🔍 请检查错误信息和依赖环境"
         exit 1
     fi
-fi 
+fi

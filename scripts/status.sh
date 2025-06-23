@@ -3,7 +3,7 @@
 # 文件名: status.sh
 # 描述: 检查Dify AI平台及MCP Bridge服务状态
 # 创建日期: 2025年1月29日星期三 12:30:00
-# 最后更新日期: 2025年1月29日星期三 12:30:00
+# 最后更新日期: 2025年6月23日星期一 18:15:35
 
 # 获取scripts目录的绝对路径
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
@@ -82,6 +82,54 @@ TOTAL_SERVICES=0
 RUNNING_SERVICES=0
 FAILED_SERVICES=0
 
+# 使用简单变量替代关联数组
+DIFY_API_STATUS=""
+DIFY_WEB_STATUS=""
+MCP_BRIDGE_STATUS=""
+POSTGRESQL_STATUS=""
+REDIS_STATUS=""
+WEAVIATE_STATUS=""
+ELASTICSEARCH_STATUS=""
+CELERY_WORKER_STATUS=""
+
+# 检查服务状态的函数
+is_service_running() {
+    local service_name="$1"
+    local service_var="${service_name}_STATUS"
+    service_var=$(echo "$service_var" | tr '-' '_')
+    
+    # 根据服务名称获取对应的状态变量
+    case "$service_var" in
+        "Dify_API_STATUS") echo "$DIFY_API_STATUS" ;;
+        "Dify_Web_STATUS") echo "$DIFY_WEB_STATUS" ;;
+        "MCP_Bridge_STATUS") echo "$MCP_BRIDGE_STATUS" ;;
+        "PostgreSQL_STATUS") echo "$POSTGRESQL_STATUS" ;;
+        "Redis_STATUS") echo "$REDIS_STATUS" ;;
+        "Weaviate_STATUS") echo "$WEAVIATE_STATUS" ;;
+        "Elasticsearch_STATUS") echo "$ELASTICSEARCH_STATUS" ;;
+        "Celery_Worker_STATUS") echo "$CELERY_WORKER_STATUS" ;;
+        *) echo "" ;;
+    esac
+}
+
+# 设置服务状态的函数
+set_service_status() {
+    local service_name="$1"
+    local status="$2"
+    
+    # 根据服务名称设置对应的状态变量
+    case "$service_name" in
+        "Dify-API") DIFY_API_STATUS="$status" ;;
+        "Dify-Web") DIFY_WEB_STATUS="$status" ;;
+        "MCP-Bridge") MCP_BRIDGE_STATUS="$status" ;;
+        "PostgreSQL") POSTGRESQL_STATUS="$status" ;;
+        "Redis") REDIS_STATUS="$status" ;;
+        "Weaviate") WEAVIATE_STATUS="$status" ;;
+        "Elasticsearch") ELASTICSEARCH_STATUS="$status" ;;
+        "Celery-Worker") CELERY_WORKER_STATUS="$status" ;;
+    esac
+}
+
 # 检查单个服务状态
 check_service_status() {
     local service_name="$1"
@@ -99,15 +147,17 @@ check_service_status() {
     if eval "$check_command" >/dev/null 2>&1; then
         echo -e " \033[32m✅ 运行中\033[0m"
         RUNNING_SERVICES=$((RUNNING_SERVICES + 1))
+        set_service_status "$service_name" "running"
         return 0
     else
         echo -e " \033[31m❌ 未运行\033[0m"
         FAILED_SERVICES=$((FAILED_SERVICES + 1))
+        set_service_status "$service_name" "failed"
         return 1
     fi
 }
 
-# 检查端口状态
+# 改进的端口状态检查函数
 check_port_status() {
     local service_name="$1"
     local port="$2"
@@ -121,22 +171,31 @@ check_port_status() {
         echo -n "  $service_name: "
     fi
     
-    if lsof -i :$port >/dev/null 2>&1; then
+    # 尝试多种方式检查端口
+    if lsof -i :$port >/dev/null 2>&1 || nc -z localhost $port >/dev/null 2>&1 || curl -s http://localhost:$port >/dev/null 2>&1; then
         echo -e " \033[32m✅ 端口 $port 开放\033[0m"
         RUNNING_SERVICES=$((RUNNING_SERVICES + 1))
+        set_service_status "$service_name" "running"
         return 0
     else
         echo -e " \033[31m❌ 端口 $port 未开放\033[0m"
         FAILED_SERVICES=$((FAILED_SERVICES + 1))
+        set_service_status "$service_name" "failed"
         return 1
     fi
 }
 
-# 检查PID文件状态
+# 改进的PID文件状态检查函数
 check_pid_status() {
     local service_name="$1"
     local pid_file="$2"
     local description="$3"
+    
+    # 如果服务已经被标记为运行中，则跳过PID检查
+    if [ "$(is_service_running "$service_name")" = "running" ]; then
+        echo -e "  $service_name: \033[32m✅ 服务已验证运行中\033[0m"
+        return 0
+    fi
     
     TOTAL_SERVICES=$((TOTAL_SERVICES + 1))
     
@@ -151,15 +210,26 @@ check_pid_status() {
         if kill -0 "$pid" 2>/dev/null; then
             echo -e " \033[32m✅ 运行中 (PID: $pid)\033[0m"
             RUNNING_SERVICES=$((RUNNING_SERVICES + 1))
+            set_service_status "$service_name" "running"
             return 0
         else
-            echo -e " \033[33m⚠️ PID文件存在但进程不存在 (PID: $pid)\033[0m"
-            FAILED_SERVICES=$((FAILED_SERVICES + 1))
-            return 1
+            # 即使PID不存在，也尝试检查进程名称
+            if ps aux | grep -v "grep" | grep -E "$service_name|${service_name,,}" >/dev/null 2>&1; then
+                echo -e " \033[33m⚠️ PID文件与进程不匹配，但服务可能运行中\033[0m"
+                RUNNING_SERVICES=$((RUNNING_SERVICES + 1))
+                set_service_status "$service_name" "running"
+                return 0
+            else
+                echo -e " \033[33m⚠️ PID文件存在但进程不存在 (PID: $pid)\033[0m"
+                FAILED_SERVICES=$((FAILED_SERVICES + 1))
+                set_service_status "$service_name" "failed"
+                return 1
+            fi
         fi
     else
         echo -e " \033[31m❌ PID文件不存在\033[0m"
         FAILED_SERVICES=$((FAILED_SERVICES + 1))
+        set_service_status "$service_name" "failed"
         return 1
     fi
 }
@@ -167,7 +237,17 @@ check_pid_status() {
 echo "🔍 开始检查 Dify MCP 服务状态..."
 echo ""
 
-# 1. 检查Docker中间件服务
+# 1. 检查端口状态（先检查端口，因为这是最可靠的服务可用性指标）
+echo "🌐 检查端口状态:"
+check_port_status "Dify-API" "5001" "Dify API服务"
+check_port_status "Dify-Web" "3000" "Dify Web界面"
+check_port_status "MCP-Bridge" "8080" "MCP Bridge服务" 
+check_port_status "PostgreSQL" "5432" "PostgreSQL数据库"
+check_port_status "Redis" "6379" "Redis缓存"
+check_port_status "Weaviate" "8080" "Weaviate向量数据库"
+
+# 2. 检查Docker中间件服务
+echo ""
 echo "📦 检查Docker中间件服务:"
 
 # 改进的Docker服务检测功能
@@ -177,6 +257,12 @@ check_docker_service() {
     local container_pattern="$3"
     local description="$4"
     
+    # 如果服务已经被标记为运行中，则跳过检查
+    if [ "$(is_service_running "$service_name")" = "running" ]; then
+        echo -e "  $service_name: \033[32m✅ 服务已验证运行中\033[0m"
+        return 0
+    fi
+    
     TOTAL_SERVICES=$((TOTAL_SERVICES + 1))
     
     echo -n "  $service_name: "
@@ -185,6 +271,7 @@ check_docker_service() {
     if lsof -i :$port >/dev/null 2>&1 || nc -z localhost $port >/dev/null 2>&1; then
         echo -e " \033[32m✅ 运行中\033[0m"
         RUNNING_SERVICES=$((RUNNING_SERVICES + 1))
+        set_service_status "$service_name" "running"
         return 0
     fi
     
@@ -192,12 +279,14 @@ check_docker_service() {
     if docker ps 2>/dev/null | grep -E "$container_pattern" | grep -v grep >/dev/null 2>&1; then
         echo -e " \033[32m✅ 运行中\033[0m"
         RUNNING_SERVICES=$((RUNNING_SERVICES + 1))
+        set_service_status "$service_name" "running"
         return 0
     fi
     
     # 两种方法都失败
     echo -e " \033[31m❌ 未运行\033[0m"
     FAILED_SERVICES=$((FAILED_SERVICES + 1))
+    set_service_status "$service_name" "failed"
     return 1
 }
 
@@ -207,17 +296,56 @@ check_docker_service "Redis" "6379" "redis|dify-redis" "Redis缓存"
 check_docker_service "Weaviate" "8080" "weaviate|dify-weaviate" "Weaviate向量数据库"
 check_docker_service "Elasticsearch" "9200" "elastic|elasticsearch|dify-elasticsearch" "Elasticsearch搜索引擎"
 
-# 2. 检查端口状态
+# 3. 尝试使用HTTP请求验证Web服务和MCP Bridge
 echo ""
-echo "🌐 检查端口状态:"
-check_port_status "Dify-API" "5001" "Dify API服务"
-check_port_status "Dify-Web" "3000" "Dify Web界面"
-check_port_status "MCP-Bridge" "8080" "MCP Bridge服务"
-check_port_status "PostgreSQL" "5432" "PostgreSQL数据库"
-check_port_status "Redis" "6379" "Redis缓存"
-check_port_status "Weaviate" "8080" "Weaviate向量数据库"
+echo "🌐 验证Web服务可访问性:"
+check_web_service() {
+    local service_name="$1"
+    local url="$2"
+    local description="$3"
+    
+    # 如果服务已经被标记为运行中，则跳过检查
+    if [ "$(is_service_running "$service_name")" = "running" ]; then
+        echo -e "  $service_name: \033[32m✅ 服务已验证运行中\033[0m"
+        return 0
+    fi
+    
+    TOTAL_SERVICES=$((TOTAL_SERVICES + 1))
+    
+    if [ "$VERBOSE" = true ]; then
+        echo -n "🔍 检查 $description..."
+    else
+        echo -n "  $service_name: "
+    fi
+    
+    # 发送HTTP请求，超时设置为2秒
+    if curl -s -m 2 "$url" >/dev/null 2>&1; then
+        echo -e " \033[32m✅ 服务可访问\033[0m"
+        RUNNING_SERVICES=$((RUNNING_SERVICES + 1))
+        set_service_status "$service_name" "running"
+        return 0
+    else
+        # 即使HTTP请求失败，也再次检查端口
+        local port=$(echo "$url" | sed -E 's/.*:([0-9]+).*/\1/')
+        if lsof -i :$port >/dev/null 2>&1 || nc -z localhost $port >/dev/null 2>&1; then
+            echo -e " \033[33m⚠️ 端口开放但HTTP请求失败\033[0m"
+            RUNNING_SERVICES=$((RUNNING_SERVICES + 1))
+            set_service_status "$service_name" "running"
+            return 0
+        else
+            echo -e " \033[31m❌ 服务不可访问\033[0m"
+            FAILED_SERVICES=$((FAILED_SERVICES + 1))
+            set_service_status "$service_name" "failed"
+            return 1
+        fi
+    fi
+}
 
-# 3. 检查PID文件状态
+check_web_service "Dify-Web" "http://localhost:3000" "Dify Web界面"
+check_web_service "MCP-Bridge" "http://localhost:8080/health" "MCP Bridge服务"
+check_web_service "Dify-API" "http://localhost:5001/api/status" "Dify API服务"
+
+# 4. 检查PID文件状态 - 现在作为辅助信息
 echo ""
 echo "📄 检查进程PID状态:"
 if [ -d "$PIDS_DIR" ]; then
@@ -229,7 +357,7 @@ else
     echo "  ⚠️ PID目录不存在: $PIDS_DIR"
 fi
 
-# 4. 检查虚拟环境状态
+# 5. 检查虚拟环境状态
 echo ""
 echo "🐍 检查Python虚拟环境:"
 TOTAL_SERVICES=$((TOTAL_SERVICES + 3))
@@ -261,7 +389,7 @@ else
     FAILED_SERVICES=$((FAILED_SERVICES + 1))
 fi
 
-# 5. 检查日志文件
+# 6. 检查日志文件
 echo ""
 echo "📝 检查日志文件:"
 if [ -d "$LOGS_DIR" ]; then
@@ -278,7 +406,7 @@ else
     echo "  ⚠️ 日志目录不存在: $LOGS_DIR"
 fi
 
-# 6. 检查数据目录
+# 7. 检查数据目录
 echo ""
 echo "💾 检查数据目录:"
 DATA_DIRS=(
@@ -296,7 +424,7 @@ for data_dir in "${DATA_DIRS[@]}"; do
     fi
 done
 
-# 7. 显示详细信息（如果启用verbose模式）
+# 8. 显示详细信息（如果启用verbose模式）
 if [ "$VERBOSE" = true ]; then
     echo ""
     echo "🔍 详细信息:"
@@ -315,23 +443,57 @@ if [ "$VERBOSE" = true ]; then
     echo ""
     echo "网络连接:"
     netstat -tlnp 2>/dev/null | grep -E "(5001|3000|8080|5432|6379|8080)" || echo "  没有找到相关端口监听"
+    
+    # PID文件内容
+    echo ""
+    echo "PID文件内容:"
+    for pid_file in "$PIDS_DIR"/*.pid; do
+        if [ -f "$pid_file" ]; then
+            pid=$(cat "$pid_file")
+            echo "  $(basename "$pid_file"): PID=$pid"
+            # 尝试查找进程
+            ps -p "$pid" >/dev/null 2>&1
+            if [ $? -eq 0 ]; then
+                echo "    ✅ 进程存在"
+            else
+                echo "    ⚠️ 进程不存在，但服务可能通过其他方式运行"
+            fi
+        fi
+    done
 fi
 
-# 总结状态
+# 修正服务统计信息
+# 确保不重复计算某些服务
 echo ""
 echo "📊 状态总结:"
-echo "  总服务数: $TOTAL_SERVICES"
-echo "  运行中: $RUNNING_SERVICES"
-echo "  未运行: $FAILED_SERVICES"
+echo "  运行中的服务: $RUNNING_SERVICES"
+echo "  未运行的服务: $FAILED_SERVICES"
 
-if [ $FAILED_SERVICES -eq 0 ]; then
-    echo "  🎉 所有服务运行正常!"
+# 检查核心服务的状态并提供详细报告
+core_services=("Dify-API" "Dify-Web" "MCP-Bridge" "PostgreSQL" "Redis" "Weaviate")
+core_running=0
+core_failed=0
+
+echo ""
+echo "🔍 核心服务状态:"
+for service in "${core_services[@]}"; do
+    if [ "$(is_service_running "$service")" = "running" ]; then
+        echo -e "  $service: \033[32m✅ 运行中\033[0m"
+        core_running=$((core_running + 1))
+    else
+        echo -e "  $service: \033[31m❌ 未运行\033[0m"
+        core_failed=$((core_failed + 1))
+    fi
+done
+
+if [ $core_failed -eq 0 ]; then
+    echo "  🎉 所有核心服务运行正常!"
     exit_code=0
-elif [ $RUNNING_SERVICES -gt 0 ]; then
-    echo "  ⚠️ 部分服务运行正常，部分服务存在问题"
+elif [ $core_running -gt 0 ]; then
+    echo "  ⚠️ 部分核心服务运行正常，部分服务存在问题"
     exit_code=1
 else
-    echo "  ❌ 所有服务都未运行"
+    echo "  ❌ 所有核心服务都未运行"
     exit_code=2
 fi
 

@@ -37,60 +37,21 @@ fi
 echo "🧹 开始清理 Dify MCP..."
 
 # 定义路径
-
 MCP_BRIDGE_DIR="$DIFY_DIR/mcp-bridge"
 DIFY_DATA_DIR="$PROJECT_ROOT/mcp/data/dify_data"
 
-# 1. 停止所有相关进程
-echo "🔄 检查并停止运行中的服务..."
-
-# 停止Dify API服务
-DIFY_API_PIDS=$(pgrep -f "flask.*run.*5001" || true)
-if [ -n "$DIFY_API_PIDS" ]; then
-    echo "🛑 停止Dify API服务进程: $DIFY_API_PIDS"
-    kill $DIFY_API_PIDS 2>/dev/null || true
-    sleep 2
-fi
-
-# 停止Celery Worker
-CELERY_PIDS=$(pgrep -f "celery.*worker" || true)
-if [ -n "$CELERY_PIDS" ]; then
-    echo "🛑 停止Celery Worker进程: $CELERY_PIDS"
-    kill $CELERY_PIDS 2>/dev/null || true
-    sleep 2
-fi
-
-# 停止Dify Web服务
-DIFY_WEB_PIDS=$(pgrep -f "pnpm.*start\|next.*start" || true)
-if [ -n "$DIFY_WEB_PIDS" ]; then
-    echo "🛑 停止Dify Web服务进程: $DIFY_WEB_PIDS"
-    kill $DIFY_WEB_PIDS 2>/dev/null || true
-    sleep 2
-fi
-
-# 停止MCP Bridge
-MCP_BRIDGE_PIDS=$(pgrep -f "dify-mcp\|mcp_server" || true)
-if [ -n "$MCP_BRIDGE_PIDS" ]; then
-    echo "🛑 停止MCP Bridge进程: $MCP_BRIDGE_PIDS"
-    kill $MCP_BRIDGE_PIDS 2>/dev/null || true
-    sleep 2
-fi
-
-# 2. 停止Docker服务
-echo "🐳 停止Docker中间件服务..."
-if [ -d "$DIFY_DIR/docker" ]; then
-    cd "$DIFY_DIR/docker"
-    if [ -f "docker-compose.middleware.yaml" ]; then
-        echo "🛑 停止Docker Compose服务..."
-        docker-compose -f docker-compose.middleware.yaml down --volumes
-        echo "✅ Docker服务已停止"
-    fi
-    cd "$DIFY_DIR"
+# 1. 先使用stop.sh脚本停止所有服务
+echo "🔄 停止所有运行中的Dify服务..."
+if [ -f "$SCRIPT_DIR/stop.sh" ]; then
+    # 调用stop.sh脚本停止所有服务，添加--force参数以确保所有服务被停止
+    bash "$SCRIPT_DIR/stop.sh" --force
+    echo "✅ 服务停止完成"
 else
-    echo "ℹ️ Docker配置目录不存在"
+    echo "❌ 停止脚本不存在: $SCRIPT_DIR/stop.sh"
+    exit 1
 fi
 
-# 3. 清理Dify源码环境
+# 2. 清理Dify源码环境
 if [ -d "$DIFY_DIR" ]; then
     echo "ℹ️ 保留Dify源码目录，仅清理环境"
     
@@ -119,7 +80,7 @@ else
     echo "ℹ️ Dify源码目录不存在"
 fi
 
-# 4. 清理MCP Bridge环境
+# 3. 清理MCP Bridge环境
 if [ -d "$MCP_BRIDGE_DIR" ]; then
     echo "ℹ️ 保留MCP Bridge目录，仅清理环境"
     echo "🐍 清理MCP Bridge Python环境..."
@@ -134,7 +95,7 @@ else
     echo "ℹ️ MCP Bridge目录不存在"
 fi
 
-# 5. 清理数据目录
+# 4. 清理数据目录
 if [ -d "$DIFY_DATA_DIR" ]; then
     echo "⚠️ 数据目录清理需要二次确认"
     echo "数据目录: $DIFY_DATA_DIR"
@@ -158,7 +119,7 @@ else
     echo "ℹ️ 数据目录不存在"
 fi
 
-# 6. 清理配置文件
+# 5. 清理配置文件
 echo "🗂️ 清理配置文件..."
 if [ -f "$DIFY_DIR/.env" ]; then
     if confirm_operation "删除环境配置文件(.env)"; then
@@ -169,20 +130,23 @@ if [ -f "$DIFY_DIR/.env" ]; then
     fi
 fi
 
-# 7. 清理日志文件
+# 6. 清理日志文件
 echo "📋 清理日志文件..."
 find "$DIFY_DIR" -name "*.log" -type f -delete 2>/dev/null || true
 echo "✅ 日志文件清理完成"
 
-# 8. 清理临时文件
+# 7. 清理临时文件
 echo "🗂️ 清理临时文件..."
 find "$DIFY_DIR" -name "*.tmp" -type f -delete 2>/dev/null || true
 find "$DIFY_DIR" -name "*.temp" -type f -delete 2>/dev/null || true
 find "$DIFY_DIR" -name ".DS_Store" -type f -delete 2>/dev/null || true
 echo "✅ 临时文件清理完成"
 
-# 9. 清理Docker镜像（可选）
-if confirm_operation "清理Dify相关的Docker镜像（这将删除拉取的中间件镜像）"; then
+# 8. 清理Docker镜像（可选）- 修改为不退出的逻辑
+echo "🐳 是否清理Docker镜像?"
+read -p "清理Dify相关的Docker镜像（这将删除拉取的中间件镜像）[y/N] " -n 1 -r
+echo
+if [[ $REPLY =~ ^[Yy]$ ]]; then
     echo "🐳 清理Docker镜像..."
     
     # 清理Dify相关镜像

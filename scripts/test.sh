@@ -19,7 +19,6 @@ cd "$DIFY_DIR"
 echo "🧪 测试 Dify MCP 环境..."
 
 # 定义路径
-
 MCP_BRIDGE_DIR="$DIFY_DIR/mcp-bridge"
 DIFY_DATA_DIR="$PROJECT_ROOT/mcp/data/dify_data"
 
@@ -43,34 +42,6 @@ test_tool() {
         echo "❌ $tool_name 未安装"
         FAILED_TESTS+=("$test_description")
         return 1
-    fi
-}
-
-# 服务测试函数
-test_service() {
-    local service_name="$1"
-    local test_url="$2"
-    local expected_pattern="$3"
-    
-    echo "🔍 测试${service_name}服务..."
-    if command -v curl &> /dev/null; then
-        local response=$(curl -s --connect-timeout 5 "$test_url" 2>/dev/null || echo "CONNECTION_FAILED")
-        if [ "$response" = "CONNECTION_FAILED" ]; then
-            echo "❌ $service_name 连接失败"
-            FAILED_TESTS+=("$service_name 服务连接")
-            return 1
-        elif echo "$response" | grep -q "$expected_pattern"; then
-            echo "✅ $service_name 响应正常"
-            PASSED_TESTS+=("$service_name 服务连接")
-            return 0
-        else
-            echo "⚠️ $service_name 响应异常"
-            FAILED_TESTS+=("$service_name 服务响应")
-            return 1
-        fi
-    else
-        echo "⚠️ curl 未安装，跳过HTTP测试"
-        return 2
     fi
 }
 
@@ -224,17 +195,11 @@ if [ -d "$DIFY_DIR/docker" ]; then
     cd "$DIFY_DIR"
 fi
 
-# 测试API服务
-test_service "Dify API" "http://localhost:5001/v1/console/api/health" "api"
-
-# 测试Web界面
-test_service "Dify Web" "http://localhost:3000" "html\|Dify"
-
 # 8. 环境变量检测
 echo ""
 echo "🔧 检测环境变量配置..."
-if [ -f "$DIFY_DIR/.env" ]; then
-    source "$DIFY_DIR/.env"
+if [ -f "$MCP_BRIDGE_DIR/.env" ]; then
+    source "$MCP_BRIDGE_DIR/.env"
     
     # 检查关键环境变量
     if [ -n "$DIFY_API_KEY" ]; then
@@ -256,13 +221,55 @@ else
     FAILED_TESTS+=("环境配置文件")
 fi
 
-# 9. MCP Bridge测试
+# 9. 使用test_mcp.py测试API服务和Web界面
 echo ""
-echo "🌉 测试MCP Bridge..."
+echo "🧪 使用test_mcp.py测试Dify服务和MCP集成..."
+if [ -d "$MCP_BRIDGE_DIR" ]; then
+    if [ -f "$MCP_BRIDGE_DIR/test_mcp.py" ]; then
+        cd "$MCP_BRIDGE_DIR"
+        if [ -d ".venv" ]; then
+            # 激活虚拟环境
+            source .venv/bin/activate
+            
+            # 设置环境变量
+            export DIFY_API_URL="${DIFY_API_URL:-http://localhost:5001/v1}"
+            export DIFY_API_KEY="${DIFY_API_KEY}"
+            
+            # 执行测试脚本
+            echo "🔍 执行test_mcp.py测试脚本..."
+            python test_mcp.py
+            TEST_RESULT=$?
+            
+            if [ $TEST_RESULT -eq 0 ]; then
+                echo "✅ MCP集成测试通过"
+                PASSED_TESTS+=("MCP集成测试")
+            else
+                echo "❌ MCP集成测试失败"
+                FAILED_TESTS+=("MCP集成测试")
+            fi
+            
+            # 退出虚拟环境
+            deactivate
+        else
+            echo "❌ 虚拟环境不存在，无法执行测试脚本"
+            FAILED_TESTS+=("虚拟环境测试")
+        fi
+        cd "$DIFY_DIR"
+    else
+        echo "❌ 测试脚本不存在: $MCP_BRIDGE_DIR/test_mcp.py"
+        FAILED_TESTS+=("测试脚本缺失")
+    fi
+else
+    echo "❌ MCP Bridge目录不存在，无法执行测试"
+    FAILED_TESTS+=("MCP Bridge测试")
+fi
+
+# 10. MCP Bridge依赖检测
+echo ""
+echo "🌉 测试MCP Bridge依赖..."
 if [ -d "$MCP_BRIDGE_DIR" ]; then
     cd "$MCP_BRIDGE_DIR"
     if [ -d ".venv" ]; then
-        echo "🔍 测试MCP Bridge依赖..."
         source .venv/bin/activate
         
         # 检查关键依赖包
@@ -285,23 +292,6 @@ if [ -d "$MCP_BRIDGE_DIR" ]; then
         deactivate
     fi
     cd "$DIFY_DIR"
-fi
-
-# 10. 综合连接测试
-echo ""
-echo "🔗 综合连接测试..."
-if [ -n "$DIFY_API_KEY" ] && command -v curl &> /dev/null; then
-    echo "🔍 测试Dify API认证..."
-    local auth_test=$(curl -s -H "Authorization: Bearer $DIFY_API_KEY" \
-        "http://localhost:5001/console/api/apps" 2>/dev/null || echo "FAILED")
-    
-    if [ "$auth_test" != "FAILED" ] && echo "$auth_test" | grep -q "data"; then
-        echo "✅ Dify API认证成功"
-        PASSED_TESTS+=("Dify API认证")
-    else
-        echo "❌ Dify API认证失败"
-        FAILED_TESTS+=("Dify API认证")
-    fi
 fi
 
 # 测试结果汇总
@@ -370,11 +360,32 @@ else
                 echo "   - 重新创建虚拟环境"
                 echo "   - 安装依赖包"
                 ;;
-            *"API"*)
-                echo "🔧 API问题:"
-                echo "   - 检查服务是否启动"
-                echo "   - 检查端口是否被占用"
-                echo "   - 查看API日志文件"
+            *"MCP集成测试"*)
+                echo "🔧 MCP集成测试问题:"
+                echo "   - 检查test_mcp.py是否有错误"
+                echo "   - 确保Dify服务已启动"
+                echo "   - 检查API密钥是否有效"
+                ;;
+            *"测试脚本"*)
+                echo "🔧 测试脚本问题:"
+                echo "   - 检查test_mcp.py是否存在"
+                echo "   - 确保test_mcp.py有正确的权限"
+                ;;
+            *"服务"*|*"连接"*)
+                echo "🔧 服务连接问题:"
+                echo "   - 确保相关服务已启动"
+                echo "   - 检查网络连接"
+                echo "   - 验证服务端口是否正确"
+                ;;
+            *"环境变量"*|*"API_KEY"*)
+                echo "🔧 环境变量问题:"
+                echo "   - 在.env文件中设置DIFY_API_KEY"
+                echo "   - 确保在Dify管理界面已生成API密钥"
+                ;;
+            *)
+                echo "🔧 一般性问题:"
+                echo "   - 查看具体失败测试项"
+                echo "   - 检查相关组件和配置"
                 ;;
         esac
     done
@@ -394,4 +405,4 @@ if [ ${#FAILED_TESTS[@]} -eq 0 ]; then
     exit 0
 else
     exit 1
-fi 
+fi                
