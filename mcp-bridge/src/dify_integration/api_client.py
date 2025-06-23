@@ -178,8 +178,8 @@ class DifyAPIClient:
         async def search_single_dataset(dataset_id: str) -> Dict[str, Any]:
             async with semaphore:
                 try:
-                    # 不传递复杂的检索模型，使用默认设置
-                    result = await self.search_dataset(dataset_id, query, None)
+                    # 传递检索模型参数，支持高级检索选项
+                    result = await self.search_dataset(dataset_id, query, retrieval_model)
                     return {
                         "dataset_id": dataset_id,
                         "success": True,

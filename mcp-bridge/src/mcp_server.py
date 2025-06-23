@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 创建日期：2025年1月28日星期二 21:45:00
-最后更新日期：2025年1月28日星期二 21:45:00
+最后更新日期：2025年6月23日星期一 15:16:00
 
 Dify MCP Bridge Server
 为 Cursor IDE 提供 Dify 知识库查询功能
@@ -85,6 +85,10 @@ class DifyMCPServer:
                                 "type": "integer",
                                 "description": "每个数据集返回的结果数量",
                                 "default": 3
+                            },
+                            "retrieval_model": {
+                                "type": "string",
+                                "description": "检索模型"
                             }
                         },
                         "required": ["query"]
@@ -106,7 +110,7 @@ class DifyMCPServer:
                 ),
                 Tool(
                     name="dify_search_documents",
-                    description="在指定数据集中搜索文档",
+                    description="获取指定数据集中的文档列表（仅返回文档元数据，不含文档内容）",
                     inputSchema={
                         "type": "object",
                         "properties": {
@@ -116,7 +120,7 @@ class DifyMCPServer:
                             },
                             "keyword": {
                                 "type": "string", 
-                                "description": "搜索关键词（可选）"
+                                "description": "文档名称搜索关键词（可选，仅匹配文档名）"
                             },
                             "page": {
                                 "type": "integer",
@@ -205,10 +209,12 @@ class DifyMCPServer:
         query = arguments["query"]
         dataset_ids = arguments.get("dataset_ids")
         top_k = arguments.get("top_k", 3)
+        retrieval_model = arguments.get("retrieval_model")  # 获取检索模型参数
         
         results = await self.client.multi_dataset_search(
             query=query,
             dataset_ids=dataset_ids,
+            retrieval_model=retrieval_model,  # 传递检索模型参数
             limit_per_dataset=top_k
         )
         
@@ -239,13 +245,16 @@ class DifyMCPServer:
                 
                 for i, record in enumerate(data[:top_k], 1):
                     score = record.get("score", 0.0)
-                    content = record.get("content", "")
+                    segment = record.get("segment", {})
+                    content = segment.get("content", "")
+                    doc_info = segment.get("document", {})
+                    doc_name = doc_info.get("name", "未知文档")
                     
                     # 截断过长的内容
                     if len(content) > 200:
                         content = content[:200] + "..."
                     
-                    result_text += f"**{i}. 相关度: {score:.3f}**\n"
+                    result_text += f"**{i}. {doc_name} (相关度: {score:.5f})**\n"
                     result_text += f"```\n{content}\n```\n\n"
         
         return [TextContent(type="text", text=result_text)]
@@ -271,11 +280,18 @@ class DifyMCPServer:
         return [TextContent(type="text", text=result)]
 
     async def _handle_search_documents(self, arguments: Dict[str, Any]) -> List[TextContent]:
-        """处理文档搜索请求"""
+        """获取数据集中的文档列表（仅返回元数据，不含文档内容）"""
         dataset_id = arguments["dataset_id"]
         keyword = arguments.get("keyword")
         page = arguments.get("page", 1)
         limit = arguments.get("limit", 20)
+        
+        try:
+            # 获取数据集名称以提供更友好的输出
+            dataset_info = await self.client.get_dataset(dataset_id)
+            dataset_name = dataset_info.get("name", dataset_id)
+        except:
+            dataset_name = dataset_id
         
         response = await self.client.get_dataset_documents(
             dataset_id=dataset_id,
@@ -285,6 +301,7 @@ class DifyMCPServer:
         )
         
         documents = response.get("data", [])
+        total = response.get("total", 0)
         
         if not documents:
             search_info = f"关键词: '{keyword}'" if keyword else "所有文档"
@@ -293,20 +310,28 @@ class DifyMCPServer:
                 text=f"📄 在数据集中搜索 {search_info} 未找到文档"
             )]
         
-        result = f"📄 **文档搜索结果**\n\n"
+        result = f"📑 **数据集「{dataset_name}」文档列表**\n\n"
         if keyword:
-            result += f"搜索关键词: `{keyword}`\n\n"
+            result += f"🔍 文件名筛选: `{keyword}`\n"
+        
+        result += f"📊 当前页: {page}, 每页: {limit}, 总计: {total} 个文档\n\n"
         
         for i, doc in enumerate(documents, 1):
             name = doc.get("name", "未命名")
             doc_id = doc.get("id", "")
             word_count = doc.get("word_count", 0)
             updated_at = doc.get("updated_at", "")
+            doc_type = doc.get("data_source_type", "未知类型")
+            status = doc.get("indexing_status", "未知状态")
             
             result += f"**{i}. {name}**\n"
             result += f"   - ID: `{doc_id}`\n"
+            result += f"   - 类型: {doc_type}\n"
             result += f"   - 字数: {word_count}\n"
+            result += f"   - 索引状态: {status}\n"
             result += f"   - 更新时间: {updated_at}\n\n"
+        
+        result += "⚠️ **注意**: 此API仅返回文档元数据，不包含文档内容。如需搜索文档内容，请使用`dify_search_knowledge`工具。\n"
         
         return [TextContent(type="text", text=result)]
 
