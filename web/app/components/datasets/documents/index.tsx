@@ -107,9 +107,9 @@ const mapDisplayStatusToIndexingStatus = (displayStatus: DocumentDisplayStatus):
     case 'enabled':
       return { status: ['completed'], archived: false, enabled: true }
     case 'disabled':
-      return { status: ['completed'], archived: false, enabled: false }
+      return { archived: false, enabled: false }
     case 'archived':
-      return { status: ['completed'], archived: true }
+      return { archived: true }
     default:
       return {}
   }
@@ -196,6 +196,8 @@ const Documents: FC<IDocumentsProps> = ({ datasetId }) => {
         result.archived = true
        else if (!hasTrue && hasFalse)
         result.archived = false
+      else if ((enabledValues.length > 0) && enabledValues.includes(false))
+        result.archived = true
     }
 
     // 同样处理enabled值

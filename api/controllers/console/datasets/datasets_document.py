@@ -6,7 +6,7 @@ from typing import cast
 from flask import request
 from flask_login import current_user
 from flask_restful import Resource, fields, marshal, marshal_with, reqparse
-from sqlalchemy import asc, desc, select
+from sqlalchemy import asc, desc, or_, select
 from werkzeug.exceptions import Forbidden, NotFound
 
 import services
@@ -183,28 +183,45 @@ class DatasetDocumentListApi(Resource):
             query = query.filter(Document.name.like(search))
 
         # 添加状态过滤（支持多选）
+        status_conditions = []
         if status_filter:
             # 验证状态值是否有效
             valid_statuses = ['waiting', 'parsing', 'cleaning', 'splitting', 'indexing', 'paused', 'error', 
                               'completed', 'archived']
             filtered_statuses = [status for status in status_filter if status in valid_statuses]
             if filtered_statuses:
-                # 使用 in_ 运算符实现多选过滤
-                query = query.filter(Document.indexing_status.in_(filtered_statuses))
+                # 添加状态条件到OR组合中
+                status_conditions.append(Document.indexing_status.in_(filtered_statuses))
         
-        # 添加归档和启用状态过滤
+        # 处理归档状态过滤
         archived_filter = request.args.get("archived")
         if archived_filter is not None:
             is_archived = archived_filter.lower() in ("yes", "true", "t", "y", "1")
-            query = query.filter(Document.archived == is_archived)
+            if is_archived:
+                # 显示已归档的文档（OR逻辑）
+                status_conditions.append(Document.archived == True)
+            else:
+                # 只显示未归档的文档（AND逻辑限制）
+                query = query.filter(Document.archived == False)
             
+        # 处理启用状态过滤
         enabled_filter = request.args.get("enabled")
         if enabled_filter is not None:
             is_enabled = enabled_filter.lower() in ("yes", "true", "t", "y", "1")
-            query = query.filter(Document.enabled == is_enabled)
+            if not is_enabled:  # enabled=false，显示已禁用的文档
+                # 显示已禁用的文档（OR逻辑）
+                status_conditions.append(Document.enabled == False)
+            else:
+                # 只显示已启用的文档（AND逻辑限制）
+                query = query.filter(Document.enabled == True)
 
-        logging.warning(f"DEBUG - status_filter: {status_filter}, archived_filter: {archived_filter}, \
-                        enabled_filter: {enabled_filter}")
+        # 应用OR条件组合
+        if status_conditions:
+            query = query.filter(or_(*status_conditions))
+
+        # 记录查询条件便于调试
+        logging.warning(f"查询条件组合 - status_filter: {status_filter}, archived_filter: {archived_filter}, \
+enabled_filter: {enabled_filter}, OR条件数: {len(status_conditions)}")
 
         if sort.startswith("-"):
             sort_logic = desc
