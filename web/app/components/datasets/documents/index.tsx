@@ -86,7 +86,7 @@ type IDocumentsProps = {
 }
 
 export const fetcher = (url: string) => get(url, {}, {})
-const DEFAULT_LIMIT = 10
+const DEFAULT_LIMIT = 28
 
 // 映射 DisplayStatus 到 DocumentIndexingStatus 和额外过滤条件
 const mapDisplayStatusToIndexingStatus = (displayStatus: DocumentDisplayStatus): {

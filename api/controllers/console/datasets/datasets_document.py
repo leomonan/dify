@@ -189,9 +189,19 @@ class DatasetDocumentListApi(Resource):
             valid_statuses = ['waiting', 'parsing', 'cleaning', 'splitting', 'indexing', 'paused', 'error', 
                               'completed', 'archived']
             filtered_statuses = [status for status in status_filter if status in valid_statuses]
+            
+            # 处理"paused"状态的特殊情况
+            if 'paused' in filtered_statuses:
+                filtered_statuses.remove('paused')  # 从列表中移除，避免重复
+                status_conditions.append(Document.is_paused == True)
+            
+            # 处理其他状态
             if filtered_statuses:
-                # 添加状态条件到OR组合中
-                status_conditions.append(Document.indexing_status.in_(filtered_statuses))
+                # 添加其他状态条件，并确保这些文档没有暂停
+                status_conditions.append(db.and_(
+                    Document.indexing_status.in_(filtered_statuses),
+                    Document.is_paused != True
+                ))
         
         # 处理归档状态过滤
         archived_filter = request.args.get("archived")
@@ -221,7 +231,7 @@ class DatasetDocumentListApi(Resource):
 
         # 记录查询条件便于调试
         logging.warning(f"查询条件组合 - status_filter: {status_filter}, archived_filter: {archived_filter}, \
-enabled_filter: {enabled_filter}, OR条件数: {len(status_conditions)}")
+enabled_filter: {enabled_filter}, OR条件数: {len(status_conditions)}, query: {query}")
 
         if sort.startswith("-"):
             sort_logic = desc
