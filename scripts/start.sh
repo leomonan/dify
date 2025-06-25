@@ -323,6 +323,30 @@ start_web_service() {
     return 0
 }
 
+start_xinference_service() {
+    echo "🤖 启动 Xinference 服务..."
+    # 检查是否已在运行
+    if pgrep -f "xinference-local" > /dev/null; then
+        echo "✅ Xinference 已在运行"
+        return 0
+    fi
+    # 检查虚拟环境
+    if [ ! -d "$DIFY_DIR/.venv" ]; then
+        echo "❌ 虚拟环境不存在，请先运行部署脚本"
+        return 1
+    fi
+    # 只在这里激活虚拟环境
+    source "$DIFY_DIR/.venv/bin/activate"
+    nohup xinference-local > "$DIFY_DIR/logs/xinference.log" 2>&1 &
+    XINFERENCE_PID=$!
+    echo $XINFERENCE_PID > "$DIFY_DIR/logs/xinference.pid"
+    deactivate
+    echo "✅ Xinference 已在后台启动 (PID: $XINFERENCE_PID)"
+    echo "   访问地址: http://127.0.0.1:9997"
+    echo "   日志文件: $DIFY_DIR/logs/xinference.log"
+    return 0
+}
+
 # 以下是主要执行逻辑，仅当脚本被直接执行时运行
 if [ "$SCRIPT_SOURCED" = false ]; then
     # 检查环境
@@ -370,6 +394,11 @@ if [ "$SCRIPT_SOURCED" = false ]; then
         if ! start_docker_services; then
             FAILED_SERVICES+=("Docker中间件")
         fi
+    fi
+
+    # 1.5 启动 Xinference 服务
+    if ! start_xinference_service; then
+        FAILED_SERVICES+=("Xinference")
     fi
 
     # 2. 启动API服务（如果需要）

@@ -141,6 +141,7 @@ echo "🔧 检查核心服务进程:"
 check_service_status "Dify-Web" "next-server" "Dify Web界面"
 check_service_status "Celery-Worker" "celery.*worker" "Celery工作进程"
 check_service_status "Dify-API" "flask.*run.*5001" "Dify API服务"
+check_service_status "Xinference" "xinference-local" "Xinference 本地推理服务"
 
 # 2. 检查Docker中间件服务
 echo ""
@@ -297,6 +298,7 @@ check_core_service "Dify-API" "flask.*run.*5001" false
 check_core_service "PostgreSQL" "postgres|postgresql|dify-postgres" true
 check_core_service "Redis" "redis|dify-redis" true
 check_core_service "Weaviate" "weaviate|dify-weaviate" true
+check_core_service "Xinference" "xinference-local" false
 
 if [ $core_failed -eq 0 ]; then
     echo "  🎉 所有核心服务运行正常!"

@@ -49,6 +49,9 @@ cp .env.example .env.local
 # 11. 构建并启动前端
 pnpm build
 pnpm start
+
+# 12. 启动 xinference
+  xinference-local
 ```
 
 ## 阶段二：MCP Bridge Server 开发

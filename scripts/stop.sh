@@ -171,7 +171,12 @@ else
     echo "ℹ️ Docker配置目录不存在"
 fi
 
-# 6. 清理其他相关进程（如果强制模式）
+# 6. 停止 Xinference 服务
+echo "🤖 停止 Xinference 服务..."
+stop_service_by_pid "Xinference" "$DIFY_DIR/logs/xinference.pid"
+stop_service_by_pattern "Xinference" "xinference-local"
+
+# 7. 清理其他相关进程（如果强制模式）
 if [ "$FORCE" = true ]; then
     echo "💀 强制清理所有相关进程..."
     
@@ -196,7 +201,7 @@ if [ "$FORCE" = true ]; then
     echo "✅ 强制清理完成"
 fi
 
-# 7. 清理PID文件
+# 8. 清理PID文件
 echo "🗂️ 清理PID文件..."
 rm -f "$DIFY_DIR/logs/"*.pid
 echo "✅ PID文件清理完成"

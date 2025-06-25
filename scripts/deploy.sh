@@ -137,8 +137,23 @@ if ! command -v pnpm &> /dev/null; then
 fi
 echo "✅ Node.js和pnpm已安装"
 
+# 创建虚拟环境
+echo "🐍 创建Python虚拟环境..."
+$PYTHON_CMD -m venv .venv
+source .venv/bin/activate
+
+# 分步安装xinference依赖（在虚拟环境中）
+pip install 'xinference[core]'
+pip install "xinference[vllm]"
+pip install "xinference[mlx]"
+pip install torch
+pip install "xinference[transformers]"
+# $PYTHON_CMD -m pip install 'xinference[all]'
+
+# 退出虚拟环境
+deactivate
+
 # 定义路径
-DIFY_DIR="$DIFY_DIR"
 MCP_BRIDGE_DIR="$DIFY_DIR/mcp-bridge"
 DIFY_DATA_DIR="$PROJECT_ROOT/mcp/data/dify_data"
 
