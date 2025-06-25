@@ -13,6 +13,7 @@ const translation = {
         words: '字符数',
         hitCount: '召回次数',
         uploadTime: '上传时间',
+        updateTime: '更新时间',
         status: '状态',
         action: '操作',
       },
