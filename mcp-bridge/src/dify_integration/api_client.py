@@ -144,15 +144,26 @@ class DifyAPIClient:
         
         参考官方文档: POST /datasets/{dataset_id}/retrieve
         """
-        # 尝试更简单的请求格式
+        # 如果没有提供检索模型，使用默认配置（混合检索+Reranking+BGE-Reranker-Large by Xinference）
+        if not retrieval_model:
+            retrieval_model = {
+                "search_method": "hybrid_search",
+                "reranking_enable": True,
+                "reranking_model": {
+                    "reranking_provider_name": "xinference",
+                    "reranking_model_name": "bge-reranker-large"
+                },
+                "score_threshold_enabled": False
+            }
+        else:
+            # 如果提供了检索模型，添加相关参数
+            pass  # 保持原有逻辑
         payload = {
-            "query": query
+            "query": query,
+            "retrieval_model": retrieval_model
         }
-        
-        # 如果提供了检索模型，添加相关参数
-        if retrieval_model:
-            payload["retrieval_model"] = retrieval_model
-        
+        print(payload)
+        logging.warning(payload)
         return await self._make_request(
             "POST", 
             f"/datasets/{dataset_id}/retrieve",

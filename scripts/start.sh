@@ -344,11 +344,42 @@ start_xinference_service() {
     echo "✅ Xinference 已在后台启动 (PID: $XINFERENCE_PID)"
     echo "   访问地址: http://127.0.0.1:9997"
     echo "   日志文件: $DIFY_DIR/logs/xinference.log"
-    echo "   10秒后启动xinference模型: bge-reranker-large"
+    
+    rm -rf "$DIFY_DIR/logs/xinference_model.log"
+    # 修改：增加等待时间并添加服务可用性检查
+    echo "   等待Xinference服务初始化完成后加载模型..."
     (
-        sleep 10
+        # 增加等待时间到30秒
+        sleep 15
         source "$DIFY_DIR/.venv/bin/activate"
-        xinference launch --model-name bge-reranker-large --model-type rerank >> "$DIFY_DIR/logs/xinference_model.log" 2>&1 &
+        
+        # 添加服务可用性检查
+        MAX_RETRIES=10
+        RETRY_INTERVAL=5
+        ENDPOINT="http://127.0.0.1:9997"
+        
+        echo "$(date) - 开始检查Xinference服务可用性..." >> "$DIFY_DIR/logs/xinference_model.log"
+        for i in $(seq 1 $MAX_RETRIES); do
+            if curl -s "$ENDPOINT" > /dev/null 2>&1; then
+                echo "$(date) - Xinference服务已准备就绪，开始加载模型..." >> "$DIFY_DIR/logs/xinference_model.log"
+                xinference launch --model-name bge-reranker-large --model-type rerank >> "$DIFY_DIR/logs/xinference_model.log" 2>&1
+                LAUNCH_STATUS=$?
+                if [ $LAUNCH_STATUS -eq 0 ]; then
+                    echo "$(date) - 模型加载成功" >> "$DIFY_DIR/logs/xinference_model.log"
+                else
+                    echo "$(date) - 模型加载失败，退出码: $LAUNCH_STATUS" >> "$DIFY_DIR/logs/xinference_model.log"
+                fi
+                break
+            else
+                echo "$(date) - 尝试 $i/$MAX_RETRIES - Xinference服务尚未就绪，等待 $RETRY_INTERVAL 秒..." >> "$DIFY_DIR/logs/xinference_model.log"
+                sleep $RETRY_INTERVAL
+            fi
+        done
+        
+        if [ $i -gt $MAX_RETRIES ]; then
+            echo "$(date) - 达到最大重试次数，Xinference服务未就绪，无法加载模型" >> "$DIFY_DIR/logs/xinference_model.log"
+        fi
+        
         deactivate
     ) &
 
