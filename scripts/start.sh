@@ -344,6 +344,14 @@ start_xinference_service() {
     echo "✅ Xinference 已在后台启动 (PID: $XINFERENCE_PID)"
     echo "   访问地址: http://127.0.0.1:9997"
     echo "   日志文件: $DIFY_DIR/logs/xinference.log"
+    echo "   10秒后启动xinference模型: bge-reranker-large"
+    (
+        sleep 10
+        source "$DIFY_DIR/.venv/bin/activate"
+        xinference launch --model-name bge-reranker-large --model-type rerank >> "$DIFY_DIR/logs/xinference_model.log" 2>&1 &
+        deactivate
+    ) &
+
     return 0
 }
 

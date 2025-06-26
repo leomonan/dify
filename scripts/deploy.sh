@@ -74,15 +74,15 @@ cd "$DIFY_DIR"
 
 echo "🚀 开始部署 Dify MCP..."
 
-# 指定使用Python 3.12版本
-PYTHON_CMD="python3.12"
+# 指定使用Python 3.11版本, ！注意！不能使用3.12版本，会出现依赖问题
+PYTHON_CMD="python3.11"
 
 # 检查指定的Python版本
 echo "🔍 检查Python环境..."
 if ! command -v $PYTHON_CMD &> /dev/null; then
     echo "❌ $PYTHON_CMD 未安装或不在PATH中"
-    echo "请安装Python 3.12或更高版本，命令："
-    echo "brew install python@3.12  # macOS用户"
+    echo "请安装Python 3.11或更高版本，命令："
+    echo "brew install python@3.11  # macOS用户"
     exit 1
 fi
 
@@ -143,12 +143,12 @@ $PYTHON_CMD -m venv .venv
 source .venv/bin/activate
 
 # 分步安装xinference依赖（在虚拟环境中）
-pip install 'xinference[core]'
-pip install "xinference[vllm]"
-pip install "xinference[mlx]"
-pip install torch
+# pip cache purge
+pip install 'xinference'
 pip install "xinference[transformers]"
-# $PYTHON_CMD -m pip install 'xinference[all]'
+pip install sentence-transformers
+pip install "xinference[mlx]"
+
 
 # 退出虚拟环境
 deactivate
@@ -174,6 +174,10 @@ fi
 cd "$DIFY_DIR"
 
 # 调用start_docker_services函数启动Docker中间件
+ if ! start_docker_daemon; then
+    echo "❌ 无法自动启动Docker服务，请手动启动Docker后再运行脚本"
+    exit 1
+fi
 start_docker_services
 if [ $? -ne 0 ]; then
     echo "❌ Docker中间件服务启动失败"
