@@ -352,7 +352,14 @@ class DifyAPIClient:
             "indexing_technique": indexing_technique,
             "doc_form": doc_form,
             "doc_language": doc_language,
-            "process_rule": process_rule or {"mode": "automatic"}
+            "process_rule": process_rule or {
+                "mode": "custom", 
+                "rules": {
+                    "pre_processing_rules": [{"id": "remove_extra_spaces", "enabled": True}, 
+                                          {"id": "remove_urls_emails", "enabled": False}], 
+                    "segmentation": {"separator": "\n\n", "max_tokens": 1000}
+                }
+            }
         }
         
         return await self._make_request(
