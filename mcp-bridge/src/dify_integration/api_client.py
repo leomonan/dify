@@ -155,20 +155,40 @@ class DifyAPIClient:
                 },
                 "score_threshold_enabled": False
             }
-        else:
-            # 如果提供了检索模型，添加相关参数
-            pass  # 保持原有逻辑
         payload = {
             "query": query,
             "retrieval_model": retrieval_model
         }
-        print(payload)
-        logging.warning(payload)
-        return await self._make_request(
-            "POST", 
-            f"/datasets/{dataset_id}/retrieve",
-            data=payload
-        )
+        try:
+            print(payload)
+            logging.warning(payload)
+            return await self._make_request(
+                "POST", 
+                f"/datasets/{dataset_id}/retrieve",
+                data=payload
+            )
+        except Exception as e:
+            # 检查是否为模型未找到的错误
+            err_msg = str(e)
+            if "Model not found in the model list" in err_msg or "Failed to rerank documents" in err_msg:
+                # 切换为cohere reranker
+                retrieval_model = dict(retrieval_model)  # 浅拷贝
+                retrieval_model["reranking_model"] = {
+                    "reranking_provider_name": "cohere",
+                    "reranking_model_name": "rerank-v3.5"
+                }
+                payload = {
+                    "query": query,
+                    "retrieval_model": retrieval_model
+                }
+                logging.warning("切换为cohere reranker后重试...")
+                return await self._make_request(
+                    "POST", 
+                    f"/datasets/{dataset_id}/retrieve",
+                    data=payload
+                )
+            else:
+                raise
     
     async def multi_dataset_search(
         self,

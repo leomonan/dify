@@ -354,7 +354,7 @@ start_xinference_service() {
         source "$DIFY_DIR/.venv/bin/activate"
         
         # 添加服务可用性检查
-        MAX_RETRIES=10
+        MAX_RETRIES=500
         RETRY_INTERVAL=5
         ENDPOINT="http://127.0.0.1:9997"
         

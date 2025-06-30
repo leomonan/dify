@@ -513,7 +513,10 @@ class DifyMCPServer:
         except Exception as e:
             return [TextContent(
                 type="text",
-                text=f"❌ 创建文档失败: {str(e)}"
+                text=(
+                    f"❌ 创建文档失败: {str(e)}"
+                    + ("\n请先查找或创建合适的数据集后再试。" if "Resource not found" in str(e) else "")
+                )
             )]
 
     async def _handle_get_indexing_status(self, arguments: Dict[str, Any]) -> List[TextContent]:
