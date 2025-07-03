@@ -515,7 +515,7 @@ class DifyMCPServer:
                 type="text",
                 text=(
                     f"❌ 创建文档失败: {str(e)}"
-                    + ("\n请先查找或创建合适的数据集后再试。" if "Resource not found" in str(e) else "")
+                    + ("\n请先查找(dify_list_datasets)，或创建(dify_create_dataset)合适的数据集后再试。" if "Resource not found" in str(e) else "")
                 )
             )]
 
