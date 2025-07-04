@@ -36,16 +36,18 @@ show_usage() {
     echo "  -w, --web-only        只启动Dify Web界面"
     echo "  -m, --mcp-only        只启动MCP Bridge"
     echo "  -d, --docker-only     只启动Docker中间件"
+    echo "  -x, --xinference      启动Xinference服务"
     echo "  -b, --background      后台运行"
     echo "  -f, --force           强制启动（跳过检查）"
     echo "  -h, --help           显示此帮助信息"
     echo ""
     echo "示例:"
-    echo "  $0                    # 启动所有服务（前台）"
-    echo "  $0 -b                 # 启动所有服务（后台）"
+    echo "  $0                    # 启动所有服务（前台，不包括Xinference）"
+    echo "  $0 -b                 # 启动所有服务（后台，不包括Xinference）"
     echo "  $0 -a                 # 只启动API服务"
     echo "  $0 -w -b              # 后台启动Web界面"
     echo "  $0 -d                 # 只启动Docker中间件"
+    echo "  $0 -x                 # 包括启动Xinference服务"
 }
 
 # 自动启动Docker服务
@@ -143,6 +145,7 @@ start_docker_daemon() {
 START_DOCKER=true
 START_API=true
 START_WEB=true
+START_XINFERENCE=false  # 默认不启动Xinference
 BACKGROUND=true
 FORCE=false
 
@@ -154,24 +157,32 @@ if [ "$SCRIPT_SOURCED" = false ]; then
                 START_DOCKER=false
                 START_API=true
                 START_WEB=false
+                START_XINFERENCE=false
                 shift
                 ;;
             -w|--web-only)
                 START_DOCKER=false
                 START_API=false
                 START_WEB=true
+                START_XINFERENCE=false
                 shift
                 ;;
             -m|--mcp-only)
                 START_DOCKER=false
                 START_API=false
                 START_WEB=false
+                START_XINFERENCE=false
                 shift
                 ;;
             -d|--docker-only)
                 START_DOCKER=true
                 START_API=false
                 START_WEB=false
+                START_XINFERENCE=false
+                shift
+                ;;
+            -x|--xinference)
+                START_XINFERENCE=true
                 shift
                 ;;
             -b|--background)
@@ -435,9 +446,11 @@ if [ "$SCRIPT_SOURCED" = false ]; then
         fi
     fi
 
-    # 1.5 启动 Xinference 服务
-    if ! start_xinference_service; then
-        FAILED_SERVICES+=("Xinference")
+    # 1.5 启动 Xinference 服务（如果需要）
+    if [ "$START_XINFERENCE" = true ]; then
+        if ! start_xinference_service; then
+            FAILED_SERVICES+=("Xinference")
+        fi
     fi
 
     # 2. 启动API服务（如果需要）
@@ -471,6 +484,10 @@ if [ "$SCRIPT_SOURCED" = false ]; then
         
         if [ "$START_WEB" = true ]; then
             echo "   🌐 Web界面: http://localhost:3000"
+        fi
+        
+        if [ "$START_XINFERENCE" = true ]; then
+            echo "   🤖 Xinference: http://127.0.0.1:9997"
         fi
         
         if [ "$BACKGROUND" = true ]; then
