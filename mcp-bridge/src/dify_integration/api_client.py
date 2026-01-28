@@ -150,8 +150,10 @@ class DifyAPIClient:
                 "search_method": "hybrid_search",
                 "reranking_enable": True,
                 "reranking_model": {
-                    "reranking_provider_name": "xinference",
-                    "reranking_model_name": "bge-reranker-large"
+                    #"reranking_provider_name": "xinference",
+                    #"reranking_model_name": "bge-reranker-large",
+                    "reranking_provider_name": "cohere",
+                    "reranking_model_name": "rerank-v3.5"
                 },
                 "score_threshold_enabled": False
             }
