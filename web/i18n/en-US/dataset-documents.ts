@@ -13,6 +13,7 @@ const translation = {
         words: 'WORDS',
         hitCount: 'RETRIEVAL COUNT',
         uploadTime: 'UPLOAD TIME',
+        updateTime: 'UPDATE TIME',
         status: 'STATUS',
         action: 'ACTION',
       },
