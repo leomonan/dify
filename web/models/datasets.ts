@@ -692,3 +692,13 @@ export type BatchImportResponse = {
   job_id: string
   job_status: string
 }
+
+export type FetchDocumentsParams = {
+  keyword?: string
+  page?: number
+  limit?: number
+  sort?: string
+  status?: DocumentIndexingStatus[]
+  archived?: boolean
+  enabled?: boolean
+}

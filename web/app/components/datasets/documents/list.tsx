@@ -2,7 +2,7 @@
 import type { FC } from 'react'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useBoolean, useDebounceFn } from 'ahooks'
-import { ArrowDownIcon } from '@heroicons/react/24/outline'
+import { ArrowDownIcon, ArrowUpIcon } from '@heroicons/react/24/outline'
 import { pick, uniq } from 'lodash-es'
 import {
   RiArchive2Line,
@@ -428,7 +428,10 @@ const DocumentList: FC<IDocumentListProps> = ({
   const isGeneralMode = chunkingMode !== ChunkingMode.parentChild
   const isQAMode = chunkingMode === ChunkingMode.qa
   const [localDocs, setLocalDocs] = useState<LocalDoc[]>(documents)
-  const [enableSort, setEnableSort] = useState(true)
+  const [sortConfig, setSortConfig] = useState<{
+    field: 'created_at' | 'updated_at' | null
+    direction: 'asc' | 'desc'
+  }>({ field: null, direction: 'desc' })
   const {
     isShowEditModal,
     showEditModal,
@@ -445,15 +448,43 @@ const DocumentList: FC<IDocumentListProps> = ({
     setLocalDocs(documents)
   }, [documents])
 
-  const onClickSort = () => {
-    setEnableSort(!enableSort)
-    if (enableSort) {
-      const sortedDocs = [...localDocs].sort((a, b) => dayjs(a.created_at).isBefore(dayjs(b.created_at)) ? -1 : 1)
-      setLocalDocs(sortedDocs)
+  const onClickSort = (field: 'created_at' | 'updated_at') => {
+    let newDirection: 'asc' | 'desc' = 'desc'
+
+    if (sortConfig.field === field) {
+      // 同一列：切换方向或清除排序
+      if (sortConfig.direction === 'desc') {
+        newDirection = 'asc'
+      }
+ else {
+        // 清除排序，恢复原始顺序
+        setSortConfig({ field: null, direction: 'desc' })
+        setLocalDocs(documents)
+        return
+      }
     }
-    else {
-      setLocalDocs(documents)
-    }
+
+    setSortConfig({ field, direction: newDirection })
+
+    const sortedDocs = [...localDocs].sort((a, b) => {
+      let aValue, bValue
+
+      if (field === 'created_at') {
+        aValue = a.created_at
+        bValue = b.created_at
+      }
+ else {
+        aValue = a.updated_at || 0
+        bValue = b.updated_at || 0
+      }
+
+      if (newDirection === 'asc')
+        return dayjs(aValue).isBefore(dayjs(bValue)) ? -1 : 1
+       else
+        return dayjs(aValue).isAfter(dayjs(bValue)) ? -1 : 1
+    })
+
+    setLocalDocs(sortedDocs)
   }
 
   const [currDocument, setCurrDocument] = useState<LocalDoc | null>(null)
@@ -518,7 +549,7 @@ const DocumentList: FC<IDocumentListProps> = ({
   return (
     <div className='relative flex h-full w-full flex-col'>
       <div className='relative grow overflow-x-auto'>
-        <table className={`mt-3 w-full min-w-[700px] max-w-full border-collapse border-0 text-sm ${s.documentTable}`}>
+        <table className={`mt-3 w-full min-w-[900px] max-w-full border-collapse border-0 text-sm ${s.documentTable}`}>
           <thead className="h-8 border-b border-divider-subtle text-xs font-medium uppercase leading-8 text-text-tertiary">
             <tr>
               <td className='w-12'>
@@ -543,9 +574,37 @@ const DocumentList: FC<IDocumentListProps> = ({
               <td className='w-24'>{t('datasetDocuments.list.table.header.words')}</td>
               <td className='w-44'>{t('datasetDocuments.list.table.header.hitCount')}</td>
               <td className='w-44'>
-                <div className='flex items-center' onClick={onClickSort}>
+                <div className='flex cursor-pointer items-center' onClick={() => onClickSort('created_at')}>
                   {t('datasetDocuments.list.table.header.uploadTime')}
-                  <ArrowDownIcon className={cn('ml-0.5 h-3 w-3 cursor-pointer stroke-current stroke-2', enableSort ? 'text-text-tertiary' : 'text-text-disabled')} />
+                  {sortConfig.field === 'created_at' ? (
+                    sortConfig.direction === 'desc' ? (
+                      <ArrowDownIcon className="ml-0.5 h-3 w-3 stroke-current stroke-2 text-text-tertiary" />
+                    ) : (
+                      <ArrowUpIcon className="ml-0.5 h-3 w-3 stroke-current stroke-2 text-text-tertiary" />
+                    )
+                  ) : (
+                    <div className="ml-0.5 flex flex-col">
+                      <ArrowUpIcon className="-mb-0.5 h-2 w-3 stroke-current stroke-2 text-text-disabled" />
+                      <ArrowDownIcon className="h-2 w-3 stroke-current stroke-2 text-text-disabled" />
+                    </div>
+                  )}
+                </div>
+              </td>
+              <td className='w-44'>
+                <div className='flex cursor-pointer items-center' onClick={() => onClickSort('updated_at')}>
+                  {t('datasetDocuments.list.table.header.updateTime')}
+                  {sortConfig.field === 'updated_at' ? (
+                    sortConfig.direction === 'desc' ? (
+                      <ArrowDownIcon className="ml-0.5 h-3 w-3 stroke-current stroke-2 text-text-tertiary" />
+                    ) : (
+                      <ArrowUpIcon className="ml-0.5 h-3 w-3 stroke-current stroke-2 text-text-tertiary" />
+                    )
+                  ) : (
+                    <div className="ml-0.5 flex flex-col">
+                      <ArrowUpIcon className="-mb-0.5 h-2 w-3 stroke-current stroke-2 text-text-disabled" />
+                      <ArrowDownIcon className="h-2 w-3 stroke-current stroke-2 text-text-disabled" />
+                    </div>
+                  )}
                 </div>
               </td>
               <td className='w-40'>{t('datasetDocuments.list.table.header.status')}</td>
@@ -614,6 +673,9 @@ const DocumentList: FC<IDocumentListProps> = ({
                 <td>{renderCount(doc.hit_count)}</td>
                 <td className='text-[13px] text-text-secondary'>
                   {formatTime(doc.created_at, t('datasetHitTesting.dateTimeFormat') as string)}
+                </td>
+                <td className='text-[13px] text-text-secondary'>
+                  {doc.updated_at ? formatTime(doc.updated_at, t('datasetHitTesting.dateTimeFormat') as string) : '-'}
                 </td>
                 <td>
                   {

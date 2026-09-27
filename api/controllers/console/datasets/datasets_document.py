@@ -6,7 +6,7 @@ from typing import cast
 from flask import request
 from flask_login import current_user
 from flask_restful import Resource, fields, marshal, marshal_with, reqparse
-from sqlalchemy import asc, desc, select
+from sqlalchemy import asc, desc, or_, select
 from werkzeug.exceptions import Forbidden, NotFound
 
 import services
@@ -146,6 +146,10 @@ class DatasetDocumentListApi(Resource):
         limit = request.args.get("limit", default=20, type=int)
         search = request.args.get("keyword", default=None, type=str)
         sort = request.args.get("sort", default="-created_at", type=str)
+        
+        # 添加状态过滤参数
+        status_filter = request.args.getlist("status")  # 获取多个状态值
+        
         # "yes", "true", "t", "y", "1" convert to True, while others convert to False.
         try:
             fetch_val = request.args.get("fetch", default="false")
@@ -177,6 +181,57 @@ class DatasetDocumentListApi(Resource):
         if search:
             search = f"%{search}%"
             query = query.filter(Document.name.like(search))
+
+        # 添加状态过滤（支持多选）
+        status_conditions = []
+        if status_filter:
+            # 验证状态值是否有效
+            valid_statuses = ['waiting', 'parsing', 'cleaning', 'splitting', 'indexing', 'paused', 'error', 
+                              'completed', 'archived']
+            filtered_statuses = [status for status in status_filter if status in valid_statuses]
+            
+            # 处理"paused"状态的特殊情况
+            if 'paused' in filtered_statuses:
+                filtered_statuses.remove('paused')  # 从列表中移除，避免重复
+                status_conditions.append(Document.is_paused == True)
+            
+            # 处理其他状态
+            if filtered_statuses:
+                # 添加其他状态条件，并确保这些文档没有暂停
+                status_conditions.append(db.and_(
+                    Document.indexing_status.in_(filtered_statuses),
+                    Document.is_paused != True
+                ))
+        
+        # 处理归档状态过滤
+        archived_filter = request.args.get("archived")
+        if archived_filter is not None:
+            is_archived = archived_filter.lower() in ("yes", "true", "t", "y", "1")
+            if is_archived:
+                # 显示已归档的文档（OR逻辑）
+                status_conditions.append(Document.archived == True)
+            else:
+                # 只显示未归档的文档（AND逻辑限制）
+                query = query.filter(Document.archived == False)
+            
+        # 处理启用状态过滤
+        enabled_filter = request.args.get("enabled")
+        if enabled_filter is not None:
+            is_enabled = enabled_filter.lower() in ("yes", "true", "t", "y", "1")
+            if not is_enabled:  # enabled=false，显示已禁用的文档
+                # 显示已禁用的文档（OR逻辑）
+                status_conditions.append(Document.enabled == False)
+            else:
+                # 只显示已启用的文档（AND逻辑限制）
+                query = query.filter(Document.enabled == True)
+
+        # 应用OR条件组合
+        if status_conditions:
+            query = query.filter(or_(*status_conditions))
+
+        # 记录查询条件便于调试
+        logging.warning(f"查询条件组合 - status_filter: {status_filter}, archived_filter: {archived_filter}, \
+enabled_filter: {enabled_filter}, OR条件数: {len(status_conditions)}, query: {query}")
 
         if sort.startswith("-"):
             sort_logic = desc
@@ -1028,6 +1083,76 @@ class WebsiteDocumentSyncApi(DocumentResource):
         return {"result": "success"}, 200
 
 
+class DocumentBatchRetryAllApi(DocumentResource):
+    @setup_required
+    @login_required
+    @account_initialization_required
+    @cloud_edition_billing_rate_limit_check("knowledge")
+    def post(self, dataset_id):
+        """批量重试数据集中所有非完成状态的文档"""
+        dataset_id = str(dataset_id)
+        dataset = DatasetService.get_dataset(dataset_id)
+        
+        if not dataset:
+            raise NotFound("Dataset not found.")
+            
+        # 检查用户权限
+        if not current_user.is_dataset_editor:
+            raise Forbidden()
+            
+        try:
+            DatasetService.check_dataset_permission(dataset, current_user)
+        except services.errors.account.NoPermissionError as e:
+            raise Forbidden(str(e))
+        
+        # 查询所有非完成状态的文档
+        retry_documents = []
+        documents = db.session.query(Document).filter(
+            Document.dataset_id == dataset_id,
+            Document.tenant_id == current_user.current_tenant_id,
+            Document.indexing_status.in_(['waiting', 'parsing', 'cleaning', 'splitting', 'indexing', 'paused', 'error'])
+        ).all()
+        
+        success_count = 0
+        error_count = 0
+        
+        for document in documents:
+            try:
+                # 403 if document is archived
+                if DocumentService.check_archived(document):
+                    logging.warning(f"Skipped archived document: {document.id}")
+                    continue
+                    
+                retry_documents.append(document)
+                success_count += 1
+            except Exception as e:
+                logging.exception(f"Failed to prepare document for retry, document id: {document.id}")
+                message = f"检查文档: {document.id} 失败: {str(e)}"
+                error_count += 1
+                continue
+        
+        if retry_documents:
+            try:
+                # 批量重试文档
+                DocumentService.retry_document(dataset_id, retry_documents)
+                message = f"已提交重试 {success_count} 个文档"
+                if error_count > 0:
+                    message += f"，{error_count} 个文档无法重试"
+            except Exception as e:
+                logging.exception(f"Failed to submit retry documents for dataset {dataset_id}")
+                message = f"重试提交失败: {str(e)}"
+        else:
+            message = "没有找到需要重试的文档"
+        
+        return {
+            "result": "success",
+            "total_documents": len(documents),
+            "success_count": success_count,
+            "error_count": error_count,
+            "message": message
+        }, 200
+
+
 api.add_resource(GetProcessRuleApi, "/datasets/process-rule")
 api.add_resource(DatasetDocumentListApi, "/datasets/<uuid:dataset_id>/documents")
 api.add_resource(DatasetInitApi, "/datasets/init")
@@ -1048,5 +1173,6 @@ api.add_resource(DocumentPauseApi, "/datasets/<uuid:dataset_id>/documents/<uuid:
 api.add_resource(DocumentRecoverApi, "/datasets/<uuid:dataset_id>/documents/<uuid:document_id>/processing/resume")
 api.add_resource(DocumentRetryApi, "/datasets/<uuid:dataset_id>/retry")
 api.add_resource(DocumentRenameApi, "/datasets/<uuid:dataset_id>/documents/<uuid:document_id>/rename")
+api.add_resource(DocumentBatchRetryAllApi, "/datasets/<uuid:dataset_id>/documents/retry-all")
 
 api.add_resource(WebsiteDocumentSyncApi, "/datasets/<uuid:dataset_id>/documents/<uuid:document_id>/website-sync")

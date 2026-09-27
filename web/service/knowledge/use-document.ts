@@ -19,16 +19,35 @@ export const useDocumentList = (payload: {
     page: number
     limit: number
     sort?: SortType
+    status?: string[]
+    archived?: boolean
+    enabled?: boolean
   },
   refetchInterval?: number | false
 }) => {
   const { query, datasetId, refetchInterval } = payload
-  const { keyword, page, limit, sort } = query
+  const { keyword, page, limit, sort, status, archived, enabled } = query
+
   return useQuery<DocumentListResponse>({
-    queryKey: [...useDocumentListKey, datasetId, keyword, page, limit, sort],
-    queryFn: () => get<DocumentListResponse>(`/datasets/${datasetId}/documents`, {
-      params: query,
-    }),
+    queryKey: [...useDocumentListKey, datasetId, keyword, page, limit, sort, status, archived, enabled],
+    queryFn: () => {
+      // 构建URL参数，支持多个status值和额外的过滤条件
+      const searchParams = new URLSearchParams()
+      searchParams.append('keyword', keyword)
+      searchParams.append('page', page.toString())
+      searchParams.append('limit', limit.toString())
+      if (sort) searchParams.append('sort', sort)
+      if (status && status.length > 0)
+        status.forEach(s => searchParams.append('status', s))
+
+      // 添加归档和启用状态的过滤参数
+      if (archived !== undefined)
+        searchParams.append('archived', archived.toString())
+      if (enabled !== undefined)
+        searchParams.append('enabled', enabled.toString())
+
+      return get<DocumentListResponse>(`/datasets/${datasetId}/documents?${searchParams.toString()}`)
+    },
     refetchInterval,
   })
 }
